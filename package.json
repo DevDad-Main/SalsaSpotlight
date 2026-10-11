@@ -1,6 +1,6 @@
 {
   "name": "spotlight-win",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spotlight-style launcher and floating desktop widgets for Windows 11",
   "main": "main.js",
   "author": "DevDad-Main",
@@ -16,17 +16,21 @@
   "build": {
     "appId": "com.devdad.salsaspotlight",
     "productName": "SalsaSpotlight",
+    "directories": { "output": "release", "buildResources": "build" },
     "files": ["main.js", "preload.js", "indexer.js", "renderer/**/*", "package.json"],
     "win": {
-      "target": ["nsis", "portable"]
-    },
-    "portable": {
-      "artifactName": "SalsaSpotlight-Portable-${version}.${ext}"
+      "target": [{ "target": "nsis", "arch": ["x64", "arm64"] }],
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}",
+      "requestedExecutionLevel": "asInvoker",
+      "icon": "build/icon.ico"
     },
     "nsis": {
-      "artifactName": "SalsaSpotlight-Setup-${version}.${ext}",
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SalsaSpotlight",
       "runAfterFinish": true
     }
   }

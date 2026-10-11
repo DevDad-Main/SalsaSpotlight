@@ -26,8 +26,11 @@ Download the latest build from the [Releases](https://github.com/DevDad-Main/Sal
 
 | File | Use it when |
 | --- | --- |
-| `SalsaSpotlight-Setup-x.y.z.exe` | You want a normal per-user install (no admin prompt). |
-| `SalsaSpotlight-Portable-x.y.z.exe` | You want to run it from a folder or USB stick with no install. |
+| `SalsaSpotlight-x.y.z-Setup.exe` | Works on any PC: it detects Intel/AMD (x64) or ARM64 automatically. |
+| `SalsaSpotlight-x.y.z-x64-Setup.exe` | Smaller download for Intel/AMD PCs. |
+| `SalsaSpotlight-x.y.z-arm64-Setup.exe` | Smaller download for ARM PCs (Snapdragon, Surface Pro X). |
+
+The installer is a normal wizard that installs for your user only, with no admin prompt, and adds Start menu and desktop shortcuts.
 
 Node.js is **not** required. The app bundles everything it needs.
 
@@ -54,10 +57,10 @@ Widgets show only while the desktop is in front (for example after <kbd>Win</kbd
 ```bash
 npm install
 npm start        # run from source
-npm run dist     # build installer and portable exe into dist/
+npm run dist     # build the installers into release/
 ```
 
-Built with Electron. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key). Errors are logged to `%APPDATA%\spotlight-win\error.log`.
+Built with Electron. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key). Errors are logged to `error.log` in the app's data folder under `%APPDATA%`.
 
 ## License
 
