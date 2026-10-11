@@ -19,7 +19,7 @@
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["main.js", "preload.js", "indexer.js", "renderer/**/*", "package.json"],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64", "arm64"] }],
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
       "artifactName": "${productName}-${version}-${arch}-Setup.${ext}",
       "requestedExecutionLevel": "asInvoker",
       "icon": "build/icon.ico"
@@ -35,4 +35,5 @@
     }
   }
 }
+
 

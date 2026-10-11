@@ -26,9 +26,7 @@ Download the latest build from the [Releases](https://github.com/DevDad-Main/Sal
 
 | File | Use it when |
 | --- | --- |
-| `SalsaSpotlight-x.y.z-Setup.exe` | Works on any PC: it detects Intel/AMD (x64) or ARM64 automatically. |
-| `SalsaSpotlight-x.y.z-x64-Setup.exe` | Smaller download for Intel/AMD PCs. |
-| `SalsaSpotlight-x.y.z-arm64-Setup.exe` | Smaller download for ARM PCs (Snapdragon, Surface Pro X). |
+| `SalsaSpotlight-x.y.z-x64-Setup.exe` | Any normal Intel/AMD Windows 10/11 PC. |
 
 The installer is a normal wizard that installs for your user only, with no admin prompt, and adds Start menu and desktop shortcuts.
 
