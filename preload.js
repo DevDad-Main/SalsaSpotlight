@@ -1,0 +1,31 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+  // launcher
+  search: (q) => ipcRenderer.invoke('search', q),
+  run: (item, q, reveal) => ipcRenderer.invoke('run', { item, q, reveal }),
+  icon: (p) => ipcRenderer.invoke('icon', p),
+  resize: (h) => ipcRenderer.send('resize', h),
+  hide: () => ipcRenderer.send('hide'),
+  onShown: (cb) => ipcRenderer.on('shown', cb),
+  // shared state and settings
+  getState: () => ipcRenderer.invoke('state'),
+  onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
+  setSetting: (key, val) => ipcRenderer.send('set', key, val),
+  toggleWidget: (t) => ipcRenderer.send('toggle-widget', t),
+  openSettings: () => ipcRenderer.send('open-settings'),
+  reset: () => ipcRenderer.send('reset'),
+  // widgets
+  onVis: (cb) => ipcRenderer.on('vis', (_e, v) => cb(v)),
+  closeWidget: () => ipcRenderer.send('widget-close'),
+  stats: () => ipcRenderer.invoke('stats'),
+  specs: () => ipcRenderer.invoke('specs'),
+  disks: () => ipcRenderer.invoke('disks'),
+  weather: (city, units) => ipcRenderer.invoke('weather', city, units),
+  topApps: () => ipcRenderer.invoke('top-apps'),
+  openPath: (p) => ipcRenderer.send('open-path', p),
+  clipGet: () => ipcRenderer.invoke('clip-get'),
+  clipCopy: (i) => ipcRenderer.send('clip-copy', i),
+  clipClear: () => ipcRenderer.send('clip-clear'),
+  onClip: (cb) => ipcRenderer.on('clip', (_e, l) => cb(l)),
+});
