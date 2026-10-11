@@ -29,7 +29,7 @@ const WIDGETS = {
   worldclock: { title: 'World Clock', size: [300, 230] },
   weather: { title: 'Weather', size: [330, 280] },
   system: { title: 'System Monitor', size: [310, 260] },
-  specs: { title: 'PC Specs', size: [350, 420] },
+  specs: { title: 'PC Specs', size: [360, 480] },
   disks: { title: 'Storage', size: [310, 240] },
   calendar: { title: 'Calendar', size: [300, 310] },
   progress: { title: 'Day & Year Progress', size: [300, 250] },
@@ -47,7 +47,9 @@ const ENGINES = {
 };
 
 const DEFAULTS = {
+  v: 2,
   hotkey: 'Alt+Space',
+  spotlightStyle: 'rounded',
   peekKey: 'Alt+W',
   launchAtLogin: false,
   theme: 'system',
@@ -55,7 +57,7 @@ const DEFAULTS = {
   tint: 0.45,
   animations: true,
   clipboard: true,
-  widgetMode: 'desktop',
+  widgetMode: 'top',
   widgetOpacity: 0.9,
   widgetScale: 1,
   search: { apps: true, files: true, folders: true, calc: true, commands: true, web: true, recents: true, maxResults: 8, engine: 'google' },
@@ -64,7 +66,7 @@ const DEFAULTS = {
     worldclock: { zones: 'America/New_York,Europe/London,Asia/Tokyo' },
     weather: { city: 'London', units: 'c' },
     system: { graph: true, battery: true },
-    specs: { host: true, user: true, os: true, cpu: true, gpu: true, ram: true, screen: true, ip: true, uptime: true },
+    specs: { host: true, user: true, os: true, cpu: true, gpu: true, ram: true, screen: true, ip: true, uptime: true, rig: true },
     calendar: { mondayFirst: true },
   },
 };
@@ -89,6 +91,7 @@ function loadSettings() {
     const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
     settings = { usage: raw.usage || {}, widgets: raw.widgets || {} };
     if (raw.prefs) merge(prefs, raw.prefs);
+    if (raw.prefs?.v !== 2) prefs.widgetMode = 'top';
   } catch { /* first run */ }
   prefs.launchAtLogin = app.getLoginItemSettings().openAtLogin;
 }
@@ -124,6 +127,7 @@ function setPref(key, val) {
 function onPref(key) {
   if (key === 'hotkey' || key === 'peekKey') registerKeys();
   else if (key === 'theme') nativeTheme.themeSource = prefs.theme;
+  else if (key === 'spotlightStyle') { const old = win; createWindow(); old.destroy(); }
   else if (key === 'widgetMode') { ensurePoller(); applyVisibility(); }
   else if (key === 'widgetScale') for (const [t, w] of Object.entries(widgetWins)) sizeWidget(t, w);
   else if (key === 'clipboard') clipTimerSet();
@@ -140,7 +144,7 @@ function startIndex() {
     workerData: { home: os.homedir(), appdata: process.env.APPDATA, programData: process.env.ProgramData },
   });
   w.on('message', (m) => {
-    if (m.batch) for (const [n, p, k] of m.batch) target.push({ n, l: n.toLowerCase(), p, k });
+    if (m.batch) for (const [n, p, k] of m.batch) { const l = n.toLowerCase(); target.push({ n, l, c: l.replace(/[^a-z0-9]/g, ''), p, k }); }
     if (m.done) { items = target; indexing = false; w.terminate(); }
   });
   w.on('error', () => { indexing = false; });
@@ -185,24 +189,45 @@ function calc(q) {
   } catch { return null; }
 }
 
-const kindOf = (k) => (k === 2 ? 'app' : k === 1 ? 'folder' : 'file');
+const kindOf = (k) => (k === 1 ? 'folder' : k === 0 ? 'file' : 'app');
+const extOf = (p) => { const i = p.lastIndexOf('.'); return i > p.lastIndexOf('\\') ? p.slice(i + 1).toLowerCase() : ''; };
+
+// Supports ext:png, .exe, *.exe, type:app|exe|folder|file, in:downloads, glob (*, ?) and /regex/.
+function parseQuery(raw) {
+  const f = { text: [], ext: null, type: null, inPath: null, regex: null, glob: null, active: false };
+  const m = raw.trim().match(/^\/(.+)\/$/);
+  if (m) { try { f.regex = new RegExp(m[1], 'i'); return f; } catch { /* treat as plain text */ } }
+  for (const tok of raw.trim().split(/\s+/)) {
+    let g;
+    if ((g = tok.match(/^(?:ext:|\.|\*\.)(\w{1,8})$/i))) f.ext = g[1].toLowerCase();
+    else if ((g = tok.match(/^(?:type|kind):(app|exe|folder|file)s?$/i))) f.type = g[1].toLowerCase();
+    else if ((g = tok.match(/^(?:in|path):(.+)$/i))) f.inPath = g[1].toLowerCase();
+    else if (/[*?]/.test(tok)) f.glob = new RegExp('^' + tok.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+    else f.text.push(tok);
+  }
+  f.active = !!(f.ext || f.type || f.inPath || f.glob);
+  return f;
+}
 
 function search(raw) {
   const S = prefs.search;
-  const q = raw.trim().toLowerCase();
-  if (!q) {
+  const f = parseQuery(raw);
+  const q = f.text.join(' ').toLowerCase();
+  const filtered = f.active || !!f.regex;
+  if (!raw.trim()) {
     if (!S.recents) return [];
     return Object.entries(settings.usage)
       .sort((a, b) => b[1].c - a[1].c).slice(0, 5)
       .map(([p, u]) => ({ kind: kindOf(u.k), title: u.n, sub: p, path: p, k: u.k }));
   }
-  if (q === 'clip' || q.startsWith('clip ')) {
-    const f = q.slice(5).trim();
-    const list = clipHistory.filter((t) => !f || t.toLowerCase().includes(f)).slice(0, 8);
+  if (!filtered && (q === 'clip' || q.startsWith('clip '))) {
+    const cf = q.slice(5).trim();
+    const list = clipHistory.filter((t) => !cf || t.toLowerCase().includes(cf)).slice(0, 8);
     if (list.length) return list.map((t) => ({ kind: 'clip', title: t.replace(/\s+/g, ' ').slice(0, 90), sub: `${t.length} characters (Enter to copy)`, value: t }));
   }
-  const words = q.split(/\s+/);
-  const allow = [S.files, S.folders, S.apps];
+  const words = q.split(/\s+/).filter(Boolean);
+  const cq = q.replace(/[^a-z0-9]/g, '');
+  const allow = [S.files, S.folders, S.apps, S.apps];
   let hits = [];
   const consider = (item, s) => {
     hits.push([s, item]);
@@ -211,14 +236,24 @@ function search(raw) {
 
   for (const it of items) {
     if (!allow[it.k]) continue;
-    let s = scoreName(it.l, q, words);
-    if (!s && it.k === 2 && q.length >= 2 && fuzzy(it.l, q)) s = 200;
+    if (f.type && !(f.type === 'folder' ? it.k === 1 : f.type === 'file' ? it.k === 0 : f.type === 'exe' ? it.k === 3 : it.k >= 2)) continue;
+    if (f.ext && extOf(it.p) !== f.ext && !(f.ext === 'exe' && it.k === 2)) continue;
+    if (f.inPath && !it.p.toLowerCase().includes(f.inPath)) continue;
+    let s;
+    if (f.regex) s = f.regex.test(it.n) ? 600 : 0;
+    else if (f.glob) s = f.glob.test(it.n) || (it.k === 3 && f.glob.test(it.n + '.exe')) ? 600 : 0;
+    else if (!q) s = 500;
+    else {
+      s = scoreName(it.l, q, words);
+      if (!s && cq.length >= 2) s = it.c === cq ? 900 : it.c.startsWith(cq) ? 750 : it.c.includes(cq) ? 450 : 0;
+      if (!s && it.k >= 2 && q.length >= 2 && fuzzy(it.l, q)) s = 200;
+    }
     if (!s) continue;
     const u = settings.usage[it.p];
-    s += (it.k === 2 ? 150 : it.k === 1 ? 40 : 0) + (u ? Math.min(u.c, 10) * 20 : 0) - it.l.length * 0.5;
+    s = (it.k === 1 ? s * 0.75 : s) + (it.k === 3 ? 300 : it.k === 2 ? 150 : 0) + (u ? Math.min(u.c, 10) * 20 : 0) - it.l.length * 0.5;
     consider(it, s);
   }
-  if (S.commands) {
+  if (S.commands && !filtered) {
     for (const c of commandList()) {
       const l = `${c.title} ${c.kw}`.toLowerCase();
       const s = scoreName(l, q, words) || (l.split(' ').some((w) => w.startsWith(q)) ? 650 : 0);
@@ -228,21 +263,25 @@ function search(raw) {
   hits.sort((a, b) => b[0] - a[0]);
 
   const out = [];
-  const c = S.calc && calc(raw);
+  const c = !filtered && S.calc && calc(raw);
   if (c) out.push(c);
   for (const [, it] of hits.slice(0, S.maxResults)) {
     if (it.cmd) out.push({ kind: 'cmd', title: it.cmd.title, sub: it.cmd.sub, cmd: it.cmd.id });
     else out.push({ kind: kindOf(it.k), title: it.n, sub: path.dirname(it.p), path: it.p, k: it.k });
   }
-  if (S.web) out.push({ kind: 'web', title: `Search the web for "${raw.trim()}"`, sub: 'Opens in your browser' });
+  if (S.web && !filtered) out.push({ kind: 'web', title: `Search the web for "${raw.trim()}"`, sub: 'Opens in your browser' });
   return out;
 }
 
 // ---------- launcher window ----------
+const PAD = () => (prefs.spotlightStyle === 'rounded' ? 18 : 0);
+const winWidth = () => WIDTH + PAD() * 2;
+
 function createWindow() {
+  const rounded = prefs.spotlightStyle === 'rounded';
   win = new BrowserWindow({
-    width: WIDTH, height: 70, show: false, frame: false, resizable: false, skipTaskbar: true,
-    alwaysOnTop: true, backgroundMaterial: 'acrylic', roundedCorners: true, thickFrame: false,
+    width: winWidth(), height: 70 + PAD() * 2, show: false, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true,
+    ...(rounded ? { transparent: true, hasShadow: false } : { backgroundMaterial: 'acrylic', roundedCorners: true, thickFrame: false }),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
   win.setMenu(null);
@@ -254,7 +293,7 @@ function createWindow() {
 function toggle() {
   if (win.isVisible()) return win.hide();
   const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-  win.setPosition(Math.round(d.x + (d.width - WIDTH) / 2), Math.round(d.y + d.height * 0.2));
+  win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * 0.2 - PAD()));
   win.show();
   win.focus();
   win.webContents.send('shown');
@@ -429,17 +468,42 @@ function clipTimerSet() {
 
 // ---------- system info ----------
 let staticSpecs;
-function gpuNames() {
-  return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(Get-CimInstance Win32_VideoController).Name'],
-      { windowsHide: true, timeout: 10000 }, (err, out) => {
-        const names = err ? [] : out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-        if (names.length) return resolve(names);
-        app.getGPUInfoAsync('complete')
-          .then((i) => resolve((i.gpuDevice || []).map((d) => d.deviceString).filter(Boolean)))
-          .catch(() => resolve([]));
-      });
-  });
+const VIRTUAL_GPU = /microsoft basic display adapter|vnc mirror driver|virtual|remote display|indirect display/i;
+const TR_PRO = 'AMD Ryzen Threadripper PRO 5955WX 16-Core (Zen3)';
+const EPYC = 'AMD EPYC 9375F 32-Core (Zen5)';
+const GFN_RIGS = [
+  { match: /RTX 3050/i, rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { match: /RTX 3060/i, rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { match: /RTX 5080/i, rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { match: /RTX 4080/i, rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+];
+const GFN_LOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log');
+
+const runText = (cmd, args, timeout = 8000) => new Promise((resolve) => {
+  execFile(cmd, args, { windowsHide: true, timeout, encoding: 'utf8' }, (err, out) => resolve(err ? '' : String(out)));
+});
+const lines = (s) => s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+
+async function gpuNames() {
+  let names = lines(await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(Get-CimInstance Win32_VideoController).Name']));
+  if (!names.length) names = lines(await runText('wmic.exe', ['path', 'win32_VideoController', 'get', 'name'])).filter((n) => n.toLowerCase() !== 'name');
+  const real = names.filter((n) => !VIRTUAL_GPU.test(n));
+  if (real.length) return real;
+  try {
+    const i = await app.getGPUInfoAsync('complete');
+    return (i.gpuDevice || []).map((d) => d.deviceString).filter((n) => n && !VIRTUAL_GPU.test(n));
+  } catch { return []; }
+}
+
+async function gpuVram() {
+  const pf = process.env.ProgramW6432 || process.env.ProgramFiles;
+  const candidates = [pf && path.join(pf, 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'), path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'nvidia-smi.exe'), 'nvidia-smi.exe'].filter(Boolean);
+  for (const exe of candidates) {
+    if (path.isAbsolute(exe) && !fs.existsSync(exe)) continue;
+    const mib = Number(lines(await runText(exe, ['--query-gpu=memory.total', '--format=csv,noheader,nounits'], 4000))[0]);
+    if (mib > 0) return `${Math.round(mib / 1024)}GB`;
+  }
+  return null;
 }
 
 async function getSpecs() {
@@ -447,9 +511,16 @@ async function getSpecs() {
     const cpus = os.cpus();
     let osName = os.version();
     if (parseInt(os.release().split('.')[2], 10) >= 22000) osName = osName.replace('Windows 10', 'Windows 11');
+    const gpu = await gpuNames();
+    const rig = GFN_RIGS.find((r) => gpu.some((n) => r.match.test(n))) || null;
+    let gfn = false;
+    try { gfn = fs.statSync(GFN_LOG).size > 0; } catch { /* not a GeForce NOW session */ }
     staticSpecs = {
       host: os.hostname(), user: os.userInfo().username, os: `${osName} (build ${os.release().split('.')[2]})`,
-      cpu: (cpus[0]?.model || 'Unknown').replace(/\s+/g, ' ').trim(), cores: cpus.length, ram: os.totalmem(), gpu: await gpuNames(),
+      cpu: rig ? rig.cpu : (cpus[0]?.model || 'Unknown').replace(/\s+/g, ' ').trim(),
+      cores: rig ? rig.allocation : `${cpus.length} threads`,
+      ram: os.totalmem(), ramLabel: rig ? rig.memory : null,
+      gpu, vram: rig ? rig.vram : await gpuVram(), rig, gfn,
     };
   }
   const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
@@ -508,11 +579,30 @@ function runCommand(id) {
 }
 
 const iconCache = new Map();
-ipcMain.handle('icon', async (_e, p) => {
+async function loadIcon(p) {
+  const tries = [p];
+  if (path.extname(p).toLowerCase() === '.lnk') {
+    try {
+      const l = shell.readShortcutLink(p);
+      if (l.icon) tries.unshift(l.icon);
+      if (l.target) tries.push(l.target);
+    } catch { /* unreadable shortcut */ }
+  }
+  for (const t of tries) {
+    for (const size of ['large', 'normal']) {
+      try {
+        const img = await app.getFileIcon(t, { size });
+        if (img && !img.isEmpty()) return img.toDataURL();
+      } catch { /* try next */ }
+    }
+  }
+  return null;
+}
+ipcMain.handle('icon', (_e, p) => {
   const ext = path.extname(p).toLowerCase();
   const key = ['.lnk', '.exe', ''].includes(ext) ? p : ext;
   if (!iconCache.has(key)) {
-    iconCache.set(key, app.getFileIcon(p, { size: 'normal' }).then((i) => i.toDataURL()).catch(() => null));
+    iconCache.set(key, loadIcon(p).then((r) => { if (!r) iconCache.delete(key); return r; }));
   }
   return iconCache.get(key);
 });
@@ -532,7 +622,7 @@ ipcMain.handle('run', async (_e, { item, q, reveal }) => {
   else if (item.kind === 'web') shell.openExternal((ENGINES[prefs.search.engine] || ENGINES.google) + encodeURIComponent(q));
 });
 
-ipcMain.on('resize', (_e, h) => { if (win) win.setContentSize(WIDTH, Math.max(70, Math.min(h, 800))); });
+ipcMain.on('resize', (_e, h) => { if (win) win.setContentSize(winWidth(), Math.max(70 + PAD() * 2, Math.min(h, 860))); });
 ipcMain.on('hide', () => win.hide());
 ipcMain.on('widget-close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
 

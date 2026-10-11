@@ -19,6 +19,7 @@ const PAGES = {
   ] },
   appearance: { title: 'Appearance', icon: '🎨', groups: [
     { title: 'Theme', items: [
+      { key: 'spotlightStyle', label: 'Spotlight style', desc: 'Rounded floating card, or Windows acrylic blur', type: 'select', options: [['rounded', 'Rounded card'], ['acrylic', 'Acrylic (Windows blur)']] },
       { key: 'theme', label: 'Spotlight theme', type: 'select', options: [['system', 'Match Windows'], ['dark', 'Dark'], ['light', 'Light']] },
       { key: 'accent', label: 'Accent colour', type: 'swatch' },
       { key: 'tint', label: 'Spotlight glass tint', desc: 'Lower is more see-through', type: 'range', min: 0.15, max: 0.9, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
@@ -59,7 +60,7 @@ const WIDGET_OPTS = {
   ],
   specs: [
     ['host', 'Device name'], ['user', 'User name'], ['os', 'Windows version'], ['cpu', 'Processor'], ['gpu', 'Graphics card'],
-    ['ram', 'Memory'], ['screen', 'Display'], ['ip', 'IP address'], ['uptime', 'Uptime'],
+    ['ram', 'Memory'], ['screen', 'Display'], ['ip', 'IP address'], ['uptime', 'Uptime'], ['rig', 'GeForce NOW rig'],
   ].map(([k, l]) => ({ key: 'widgetOpts.specs.' + k, label: l, type: 'toggle' })),
   calendar: [{ key: 'widgetOpts.calendar.mondayFirst', label: 'Week starts on Monday', type: 'toggle' }],
 };

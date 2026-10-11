@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
-const input = $('q'), list = $('list'), foot = $('foot'), app = $('app');
-let results = [], sel = 0, seq = 0;
+const input = $('q'), list = $('list'), foot = $('foot'), app = $('app'), wrap = $('wrap');
+let results = [], sel = 0, seq = 0, recents = true;
 
 const svg = (body, color) => `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const ICONS = {
@@ -13,12 +13,31 @@ const ICONS = {
   clip: svg('<rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V3h6v2M9 11h6M9 15h4"/>', '#c084fc'),
 };
 const TAGS = { app: 'App', folder: 'Folder', file: 'File', cmd: 'Command', calc: 'Calculator', web: 'Web', clip: 'Clipboard' };
+const GROUPS = { calc: 'Calculator', app: 'Applications', cmd: 'Commands', folder: 'Folders', file: 'Files', clip: 'Clipboard', web: 'Web' };
+const ORDER = Object.keys(GROUPS);
+
+function arrange(r) {
+  if (r.length < 2 || !input.value.trim()) return r;
+  return [r[0], ...r.slice(1).sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind))];
+}
+
+function header(text) {
+  const h = document.createElement('li');
+  h.className = 'hdr';
+  h.textContent = text;
+  return h;
+}
 
 function render() {
   list.replaceChildren();
+  const hasTop = results.length > 0 && input.value.trim() && results[0].kind !== 'web';
+  let lastGroup = '';
   results.forEach((r, i) => {
+    const top = i === 0 && hasTop;
+    const group = top ? 'Top Hit' : (recents && !input.value.trim() ? 'Frequently Used' : GROUPS[r.kind]);
+    if (group !== lastGroup) { list.append(header(group)); lastGroup = group; }
     const li = document.createElement('li');
-    if (i === sel) li.className = 'sel';
+    li.className = 'row' + (i === sel ? ' sel' : '') + (top ? ' top' : '');
     const ico = document.createElement('div');
     ico.className = 'ico';
     ico.innerHTML = ICONS[r.kind];
@@ -41,7 +60,7 @@ function render() {
     txt.append(t, s);
     const tag = document.createElement('div');
     tag.className = 'tag';
-    tag.textContent = TAGS[r.kind];
+    tag.textContent = top ? '' : TAGS[r.kind];
     li.append(ico, txt, tag);
     li.addEventListener('mousemove', () => { if (sel !== i) { sel = i; mark(); } });
     li.addEventListener('click', () => run(false));
@@ -51,8 +70,9 @@ function render() {
 }
 
 function mark() {
-  [...list.children].forEach((li, i) => li.classList.toggle('sel', i === sel));
-  list.children[sel]?.scrollIntoView({ block: 'nearest' });
+  const rows = list.querySelectorAll('li.row');
+  rows.forEach((li, i) => li.classList.toggle('sel', i === sel));
+  rows[sel]?.scrollIntoView({ block: 'nearest' });
 }
 
 function run(reveal) {
@@ -64,7 +84,7 @@ async function update() {
   const my = ++seq;
   const r = await window.api.search(input.value);
   if (my !== seq) return;
-  results = r;
+  results = arrange(r);
   sel = 0;
   render();
 }
@@ -77,12 +97,17 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') window.api.hide();
 });
 
-new ResizeObserver(() => window.api.resize(Math.ceil(app.getBoundingClientRect().height))).observe(app);
+new ResizeObserver(() => window.api.resize(Math.ceil(wrap.getBoundingClientRect().height))).observe(wrap);
 
 function applyPrefs(p) {
   const r = document.documentElement.style;
+  const rounded = p.spotlightStyle === 'rounded';
   r.setProperty('--accent', p.accent);
-  r.setProperty('--ta', p.tint);
+  r.setProperty('--ta', rounded ? 0.7 + p.tint * 0.28 : p.tint);
+  r.setProperty('--pad', rounded ? '18px' : '0px');
+  recents = p.search.recents;
+  document.body.classList.toggle('rounded', rounded);
+  document.body.classList.toggle('acrylic', !rounded);
   document.body.classList.toggle('noanim', !p.animations);
 }
 window.api.getState().then((s) => applyPrefs(s.prefs));

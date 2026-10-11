@@ -8,8 +8,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const head = (t, extra = '') => `<div class="label"><i class="dot"></i>${t}${extra}</div>`;
 const gb = (b) => (b / 1024 ** 3).toFixed(b > 1e11 ? 0 : 1) + ' GB';
 
-let timers = [], cleanups = [], state = null, mountKey = '', mountSeq = 0;
-const every = (fn, ms) => { fn(); timers.push(setInterval(fn, ms)); };
+let timers = [], tasks = [], paused = false, cleanups = [], state = null, mountKey = '', mountSeq = 0;
+const every = (fn, ms) => { fn(); tasks.push(fn); timers.push(setInterval(() => { if (!paused) fn(); }, ms)); };
 
 const CIRC = 2 * Math.PI * 38;
 const gauge = (id, cls, label) => `<div class="g"><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg ${cls}" id="${id}" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/></svg><div class="v"><span id="${id}v">0%</span><small>${label}</small></div></div>`;
@@ -100,6 +100,8 @@ const W = {
       const box = $('.wx');
       if (d.error) { box.innerHTML = '<div class="wmsg"></div>'; $('.wmsg').textContent = `${d.error} - set a city in Settings`; return; }
       const [icon, text] = WX(d.code, d.isDay);
+      const c = d.code;
+      document.querySelector('.card').dataset.sky = c >= 95 ? 'storm' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c === 3 || (c >= 45 && c <= 48) ? 'cloud' : d.isDay ? 'day' : 'night';
       const hours = d.hours.map((h) => `<div class="hour">${esc(h.h.slice(0, 2))}<span>${WX(h.code, true)[0]}</span><b>${Math.round(h.t)}°</b></div>`).join('');
       box.innerHTML = `<div class="wcity">${esc(d.city)}, ${esc(d.country || '')} <span class="muted">- ${esc(text)}</span></div><div class="wmain"><div class="wicon">${icon}</div><div class="wtemp grad">${Math.round(d.temp)}${esc(d.unit)}</div></div>`
         + `<div class="wmeta"><span>Feels ${Math.round(d.feels)}°</span><span>H ${Math.round(d.hi)}° L ${Math.round(d.lo)}°</span><span>💧 ${d.humidity}%</span><span>💨 ${Math.round(d.wind)} ${esc(d.windUnit)}</span></div>`
@@ -135,11 +137,12 @@ const W = {
     if (tk !== mountSeq) return;
     const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
     const rows = [
+      ['rig', 'GeForce NOW rig', '☁️', s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
       ['host', 'Device', '🖥️', s.host], ['user', 'User', '👤', s.user], ['os', 'Windows', '🪟', s.os],
-      ['cpu', 'Processor', '🧠', `${s.cpu} (${s.cores} threads)`], ['gpu', 'Graphics', '🎮', s.gpu.join(' + ') || 'Unknown'],
-      ['ram', 'Memory', '💾', gb(s.ram) + ' installed'], ['screen', 'Display', '🖵', s.screens.join(' + ')],
+      ['cpu', 'Processor', '🧠', `${s.cpu} (${s.cores})`], ['gpu', 'Graphics', '🎮', (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '')],
+      ['ram', 'Memory', '💾', s.ramLabel ? `${s.ramLabel} allocated` : gb(s.ram) + ' installed'], ['screen', 'Display', '🖵', s.screens.join(' + ')],
       ['ip', 'Network', '🌐', s.ip || 'Offline'], ['uptime', 'Uptime', '⏱️', up],
-    ].filter((r) => o[r[0]]);
+    ].filter((r) => o[r[0]] && r[3]);
     const box = $('.rows');
     box.replaceChildren();
     rows.forEach(([, label, icon, value], i) => {
@@ -356,9 +359,11 @@ function mount() {
   mountSeq++;
   timers.forEach(clearInterval);
   timers = [];
+  tasks = [];
   cleanups.splice(0).forEach((f) => f());
   el.replaceChildren();
   onClip = () => {};
+  document.querySelector('.card').className = 'card w-' + type;
   const p = state.prefs;
   W[type]({ ...(p.widgetOpts[type] || {}) }, p);
 }
@@ -370,6 +375,10 @@ function onState(s) {
   if (key !== mountKey) { mountKey = key; mount(); }
 }
 
-window.api.onVis((v) => document.body.classList.toggle('hidden', !v));
+window.api.onVis((v) => {
+  paused = !v;
+  document.body.classList.toggle('hidden', !v);
+  if (v) tasks.forEach((f) => f());
+});
 window.api.onState(onState);
 window.api.getState().then(onState);
