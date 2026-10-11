@@ -1,14 +1,17 @@
 {
   "name": "spotlight-win",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Spotlight-style launcher and floating desktop widgets for Windows 11",
   "main": "main.js",
   "author": "DevDad-Main",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win --publish never"
   },
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
   "devDependencies": {
     "electron": "^44.7.0",
     "electron-builder": "^26.0.0"
@@ -16,6 +19,7 @@
   "build": {
     "appId": "com.devdad.salsaspotlight",
     "productName": "SalsaSpotlight",
+    "publish": { "provider": "github", "owner": "DevDad-Main", "repo": "SalsaSpotlight" },
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["main.js", "preload.js", "indexer.js", "renderer/**/*", "package.json"],
     "win": {

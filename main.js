@@ -4,7 +4,9 @@ const fs = require('fs');
 const os = require('os');
 const { Worker } = require('worker_threads');
 const { spawn, execFile } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
+let updateReady = null;
 if (!app.requestSingleInstanceLock()) app.quit();
 
 function logError(e) {
@@ -587,6 +589,21 @@ ipcMain.on('clip-clear', () => {
   for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send('clip', clipHistory);
 });
 
+// ---------- auto-update (GitHub releases) ----------
+function setupUpdates() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('error', logError);
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = info.version;
+    new Notification({ title: 'Update ready', body: `SalsaSpotlight ${info.version} installs when you quit. Right-click the tray icon to restart now.` }).show();
+  });
+  const check = () => autoUpdater.checkForUpdates().catch(logError);
+  check();
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+
 // ---------- tray ----------
 function trayIcon() {
   const S = 32, buf = Buffer.alloc(S * S * 4);
@@ -611,6 +628,7 @@ function createTray() {
   const menu = () => Menu.buildFromTemplate([
     { label: 'Open Spotlight', click: toggle },
     { label: 'Settings...', click: openSettings },
+    ...(updateReady ? [{ label: `Restart to update to ${updateReady}`, click: () => { quitting = true; autoUpdater.quitAndInstall(false, true); } }] : []),
     { type: 'separator' },
     { label: 'Peek widgets on top', type: 'checkbox', checked: peek, click: () => { peek = !peek; applyVisibility(); } },
     { label: 'Widgets', submenu: Object.keys(WIDGETS).map((t) => ({ label: WIDGETS[t].title, type: 'checkbox', checked: !!widgetWins[t], click: () => toggleWidget(t) })) },
@@ -648,6 +666,7 @@ app.whenReady().then(() => {
     if (firstRun) setTimeout(toggle, 800);
   }
   startIndex();
+  setupUpdates();
   setInterval(startIndex, 10 * 60 * 1000);
   clipTimerSet();
   ensurePoller();
