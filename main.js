@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, Tray, Menu, nativeImage, clipboard, nativeTheme, net } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, Tray, Menu, nativeImage, clipboard, nativeTheme, net, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -625,17 +625,28 @@ function createTray() {
 
 function registerKeys() {
   globalShortcut.unregisterAll();
-  if (!prefs.hotkey || !globalShortcut.register(prefs.hotkey, toggle)) globalShortcut.register('Ctrl+Space', toggle);
+  const primary = !!prefs.hotkey && globalShortcut.register(prefs.hotkey, toggle);
+  if (!primary) globalShortcut.register('Ctrl+Space', toggle);
   if (prefs.peekKey) globalShortcut.register(prefs.peekKey, () => { peek = !peek; applyVisibility(); });
+  return primary;
 }
 
 // ---------- lifecycle ----------
 app.whenReady().then(() => {
+  const firstRun = !fs.existsSync(settingsFile());
   loadSettings();
   nativeTheme.themeSource = prefs.theme;
   createWindow();
   createTray();
-  registerKeys();
+  const hotkeyOk = registerKeys();
+  if (firstRun || !hotkeyOk) {
+    new Notification({
+      title: 'SalsaSpotlight is running',
+      body: hotkeyOk ? `Press ${prefs.hotkey.replace('+', ' + ')} to search. Find it in the system tray too.`
+        : `${prefs.hotkey} is taken by another app, so use Ctrl + Space instead. Change it in Settings.`,
+    }).show();
+    if (firstRun) setTimeout(toggle, 800);
+  }
   startIndex();
   setInterval(startIndex, 10 * 60 * 1000);
   clipTimerSet();
@@ -644,5 +655,6 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => { quitting = true; });
+app.on('second-instance', () => { if (win && !win.isVisible()) toggle(); });
 app.on('will-quit', () => { globalShortcut.unregisterAll(); poller?.kill(); });
 app.on('window-all-closed', (e) => e.preventDefault());
