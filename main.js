@@ -156,6 +156,7 @@ function commandList() {
     { id: 'winsettings', title: 'Windows Settings', sub: 'Open Windows Settings', kw: 'control panel' },
     { id: 'prefs', title: 'Spotlight Settings', sub: 'Customize Spotlight and widgets', kw: 'preferences options customize' },
     { id: 'taskmgr', title: 'Task Manager', sub: 'Open Task Manager', kw: 'processes performance' },
+    { id: 'update', title: 'Check for updates', sub: 'Download and install the latest version', kw: 'upgrade version' },
     { id: 'lock', title: 'Lock PC', sub: 'Lock this computer', kw: 'lock screen' },
     { id: 'peek', title: 'Peek widgets', sub: 'Show or hide widgets on top', kw: 'widgets show hide' },
     ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title} widget`, sub: 'Floating widget', kw: 'widget' })),
@@ -573,6 +574,7 @@ function runCommand(id) {
     case 'lock': spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore' }).unref(); break;
     case 'peek': peek = !peek; applyVisibility(); break;
     case 'reindex': startIndex(); break;
+    case 'update': checkUpdates(true); break;
     case 'quit': app.quit(); break;
     default: if (id.startsWith('w-')) toggleWidget(id.slice(2));
   }
@@ -680,18 +682,31 @@ ipcMain.on('clip-clear', () => {
 });
 
 // ---------- auto-update (GitHub releases) ----------
+let manualCheck = false;
+const notify = (title, body) => new Notification({ title, body }).show();
+
+function checkUpdates(manual) {
+  if (!app.isPackaged) { if (manual) notify('Updates', 'Updates only work in the installed app.'); return; }
+  manualCheck = manual;
+  if (manual && updateReady) { quitting = true; autoUpdater.quitAndInstall(false, true); return; }
+  if (manual) notify('Checking for updates', `Current version ${app.getVersion()}`);
+  autoUpdater.checkForUpdates().catch(logError);
+}
+
 function setupUpdates() {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('error', logError);
+  autoUpdater.on('error', (e) => { logError(e); if (manualCheck) notify('Update failed', 'Could not reach GitHub. Try again later.'); });
+  autoUpdater.on('update-not-available', () => { if (manualCheck) notify('You are up to date', `SalsaSpotlight ${app.getVersion()} is the latest version.`); manualCheck = false; });
+  autoUpdater.on('update-available', (info) => { if (manualCheck) notify('Update found', `Downloading ${info.version}...`); });
   autoUpdater.on('update-downloaded', (info) => {
     updateReady = info.version;
-    new Notification({ title: 'Update ready', body: `SalsaSpotlight ${info.version} installs when you quit. Right-click the tray icon to restart now.` }).show();
+    if (manualCheck) { quitting = true; autoUpdater.quitAndInstall(false, true); return; }
+    notify('Update ready', `SalsaSpotlight ${info.version} installs when you quit. Right-click the tray icon to restart now.`);
   });
-  const check = () => autoUpdater.checkForUpdates().catch(logError);
-  check();
-  setInterval(check, 6 * 60 * 60 * 1000);
+  checkUpdates(false);
+  setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
 }
 
 // ---------- tray ----------
@@ -725,6 +740,7 @@ function createTray() {
     { type: 'separator' },
     { label: 'Launch at login', type: 'checkbox', checked: prefs.launchAtLogin, click: (i) => setPref('launchAtLogin', i.checked) },
     { label: 'Rebuild index', click: startIndex },
+    { label: 'Check for updates', click: () => checkUpdates(true) },
     { label: 'Quit', click: () => app.quit() },
   ]);
   tray.on('click', toggle);
