@@ -7,6 +7,7 @@ const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
 let updateReady = null;
+const updateInfo = { status: 'idle', latest: null, percent: 0, error: '', checkedAt: 0 };
 if (!app.requestSingleInstanceLock()) app.quit();
 
 function logError(e) {
@@ -118,6 +119,7 @@ function saveSettings() {
 }
 
 const state = () => ({
+  update: { ...updateInfo, version: app.getVersion(), packaged: app.isPackaged },
   sizes: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, settings.widgets[t]?.size || 'm'])),
   prefs,
   open: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, !!widgetWins[t]])),
@@ -319,8 +321,9 @@ function toggle() {
   win.webContents.send('shown');
 }
 
-function openSettings() {
-  if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
+function openSettings(page) {
+  const target = typeof page === 'string' ? page : null;
+  if (settingsWin) { settingsWin.show(); settingsWin.focus(); if (target) settingsWin.webContents.send('goto', target); return; }
   settingsWin = new BrowserWindow({
     width: 900, height: 660, minWidth: 740, minHeight: 520, backgroundMaterial: 'mica',
     titleBarStyle: 'hidden',
@@ -328,7 +331,7 @@ function openSettings() {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   settingsWin.setMenu(null);
-  settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
+  settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: target ? { page: target } : {} });
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
@@ -682,7 +685,7 @@ function runCommand(id) {
     case 'lock': spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore' }).unref(); break;
     case 'peek': peek = !peek; applyVisibility(); break;
     case 'reindex': startIndex(); break;
-    case 'update': checkUpdates(true); break;
+    case 'update': openSettings('updates'); checkUpdates(true); break;
     case 'quit': app.quit(); break;
     default:
       if (id.startsWith('size-')) { const [, t, k] = id.split('-'); setWidgetSize(t, k); }
@@ -742,6 +745,8 @@ ipcMain.handle('state', () => state());
 ipcMain.on('set', (_e, key, val) => setPref(String(key), val));
 ipcMain.on('toggle-widget', (_e, t) => toggleWidget(String(t)));
 ipcMain.on('open-settings', openSettings);
+ipcMain.on('check-updates', () => checkUpdates(true));
+ipcMain.on('install-update', installUpdate);
 ipcMain.on('reset', () => {
   const keep = prefs.launchAtLogin;
   prefs = structuredClone(DEFAULTS);
@@ -822,26 +827,35 @@ ipcMain.on('clip-clear', () => {
 // ---------- auto-update (GitHub releases) ----------
 let manualCheck = false;
 const notify = (title, body) => new Notification({ title, body }).show();
+const setUpdate = (patch) => { Object.assign(updateInfo, patch); broadcastState(); };
+const errText = (e) => String(e?.message || e).split('\n')[0];
 
 function checkUpdates(manual) {
-  if (!app.isPackaged) { if (manual) notify('Updates', 'Updates only work in the installed app.'); return; }
   manualCheck = manual;
-  if (manual && updateReady) { quitting = true; autoUpdater.quitAndInstall(false, true); return; }
-  if (manual) notify('Checking for updates', `Current version ${app.getVersion()}`);
-  autoUpdater.checkForUpdates().catch(logError);
+  if (!app.isPackaged) { setUpdate({ status: 'dev' }); return; }
+  if (updateReady) { setUpdate({ status: 'ready', latest: updateReady }); return; }
+  setUpdate({ status: 'checking', error: '', percent: 0 });
+  autoUpdater.checkForUpdates().catch((e) => { logError(e); setUpdate({ status: 'error', error: errText(e) }); });
+}
+
+function installUpdate() {
+  if (!updateReady) return;
+  quitting = true;
+  autoUpdater.quitAndInstall(false, true);
 }
 
 function setupUpdates() {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('error', (e) => { logError(e); if (manualCheck) notify('Update failed', 'Could not reach GitHub. Try again later.'); });
-  autoUpdater.on('update-not-available', () => { if (manualCheck) notify('You are up to date', `SalsaSpotlight ${app.getVersion()} is the latest version.`); manualCheck = false; });
-  autoUpdater.on('update-available', (info) => { if (manualCheck) notify('Update found', `Downloading ${info.version}...`); });
+  autoUpdater.on('error', (e) => { logError(e); setUpdate({ status: 'error', error: errText(e) }); });
+  autoUpdater.on('update-not-available', () => setUpdate({ status: 'uptodate', checkedAt: Date.now() }));
+  autoUpdater.on('update-available', (info) => setUpdate({ status: 'downloading', latest: info.version, percent: 0 }));
+  autoUpdater.on('download-progress', (p) => setUpdate({ status: 'downloading', percent: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (info) => {
     updateReady = info.version;
-    if (manualCheck) { quitting = true; autoUpdater.quitAndInstall(false, true); return; }
-    notify('Update ready', `SalsaSpotlight ${info.version} installs when you quit. Right-click the tray icon to restart now.`);
+    setUpdate({ status: 'ready', latest: info.version, percent: 100 });
+    if (!manualCheck) notify('Update ready', `SalsaSpotlight ${info.version} installs when you quit. Open Settings > Updates to restart now.`);
   });
   checkUpdates(false);
   setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
@@ -878,7 +892,7 @@ function createTray() {
     { type: 'separator' },
     { label: 'Launch at login', type: 'checkbox', checked: prefs.launchAtLogin, click: (i) => setPref('launchAtLogin', i.checked) },
     { label: 'Rebuild index', click: startIndex },
-    { label: 'Check for updates', click: () => checkUpdates(true) },
+    { label: 'Check for updates', click: () => { openSettings('updates'); checkUpdates(true); } },
     { label: 'Quit', click: () => app.quit() },
   ]);
   tray.on('click', toggle);

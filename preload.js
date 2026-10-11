@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('api', {
   setWidgetSize: (t, k) => ipcRenderer.send('set-size', t, k),
   arrange: () => ipcRenderer.send('arrange'),
   openSettings: () => ipcRenderer.send('open-settings'),
+  onGoto: (cb) => ipcRenderer.on('goto', (_e, p) => cb(p)),
+  checkUpdates: () => ipcRenderer.send('check-updates'),
+  installUpdate: () => ipcRenderer.send('install-update'),
   reset: () => ipcRenderer.send('reset'),
   // widgets
   onVis: (cb) => ipcRenderer.on('vis', (_e, v) => cb(v)),

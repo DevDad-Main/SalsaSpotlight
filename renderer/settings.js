@@ -102,6 +102,13 @@ function control(item) {
       reg(() => { input.value = get(item.key); });
       break;
     }
+    case 'info': {
+      const s = document.createElement('span');
+      s.id = 'instv';
+      s.className = 'val';
+      wrap.append(s);
+      break;
+    }
     case 'wsize': {
       input = document.createElement('select');
       [['s', 'Small'], ['m', 'Medium'], ['l', 'Large'], ['xl', 'Extra large']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; input.append(o); });
@@ -185,6 +192,52 @@ function widgetControls(t) {
   return box;
 }
 
+function updatesPage() {
+  const h1 = document.createElement('h1');
+  h1.textContent = 'Updates';
+  main.append(h1);
+  const card = document.createElement('div');
+  card.className = 'card upd';
+  card.innerHTML = '<div class="upd-row"><div class="upd-ico" id="ui"></div><div class="upd-txt"><b id="ut"></b><small id="us"></small></div></div>'
+    + '<div class="upbar" id="upbar" hidden><i id="upfill"></i></div>'
+    + '<div class="upd-btns"><button class="btn" id="ucheck">Check for updates</button><button class="btn primary" id="uinstall" hidden>Restart and install</button></div>';
+  main.append(card);
+  document.getElementById('ucheck').onclick = () => window.api.checkUpdates();
+  document.getElementById('uinstall').onclick = () => window.api.installUpdate();
+  const info = document.createElement('div');
+  info.className = 'card';
+  info.append(row({ label: 'Installed version', desc: 'Updates come from the SalsaSpotlight GitHub releases', type: 'info' }));
+  main.append(info);
+}
+
+function updateUI() {
+  const t = document.getElementById('ut');
+  if (!t) return;
+  const u = state.update;
+  const M = {
+    idle: ['⬆️', `Version ${u.version}`, 'Press "Check for updates" to look for a newer version.'],
+    checking: ['🔄', 'Checking for updates...', `Current version ${u.version}`],
+    downloading: ['⬇️', `Downloading version ${u.latest || ''}`, `${u.percent}% complete`],
+    ready: ['✅', `Version ${u.latest} is ready`, 'Restart to install it now. It also installs when you quit.'],
+    uptodate: ['👍', 'You are up to date', `SalsaSpotlight ${u.version} is the latest version.`],
+    error: ['⚠️', 'Could not check for updates', u.error || 'Check your internet connection and try again.'],
+    dev: ['🛠️', 'Updates work in the installed app', `Running from source (${u.version}).`],
+  };
+  const [icon, title, sub] = M[u.status] || M.idle;
+  document.getElementById('ui').textContent = icon;
+  t.textContent = title;
+  document.getElementById('us').textContent = sub;
+  document.getElementById('ui').classList.toggle('spin', u.status === 'checking');
+  const bar = document.getElementById('upbar');
+  bar.hidden = u.status !== 'downloading';
+  document.getElementById('upfill').style.width = u.percent + '%';
+  document.getElementById('uinstall').hidden = u.status !== 'ready';
+  const check = document.getElementById('ucheck');
+  check.disabled = u.status === 'checking' || u.status === 'downloading';
+  const v = document.getElementById('instv');
+  if (v) v.textContent = u.version;
+}
+
 function widgetPage() {
   const h1 = document.createElement('h1');
   h1.textContent = 'Widgets';
@@ -235,6 +288,7 @@ function showPage() {
   main.scrollTop = 0;
   nav.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.p === page));
   if (page === 'widgets') widgetPage();
+  else if (page === 'updates') updatesPage();
   else {
     const h1 = document.createElement('h1');
     h1.textContent = PAGES[page].title;
@@ -245,6 +299,7 @@ function showPage() {
 }
 
 function refresh() {
+  updateUI();
   controls.forEach((c) => c.fn());
   const p = document.getElementById('poll');
   if (p) { p.textContent = state.poller ? 'Working' : 'Unavailable'; p.className = 'status ' + (state.poller ? 'ok' : 'no'); }
@@ -255,7 +310,9 @@ function init(s) {
   const first = !state;
   state = s;
   if (first) {
-    const all = { ...PAGES, widgets: { title: 'Widgets', icon: '🧩' } };
+    const all = { ...PAGES, widgets: { title: 'Widgets', icon: '🧩' }, updates: { title: 'Updates', icon: '⬆️' } };
+    const want = new URLSearchParams(location.search).get('page');
+    if (want && all[want]) page = want;
     Object.entries(all).forEach(([id, p]) => {
       const b = document.createElement('button');
       b.dataset.p = id;
@@ -268,4 +325,5 @@ function init(s) {
 }
 
 window.api.onState(init);
+window.api.onGoto((p) => { if (p === 'updates' || p === 'widgets' || PAGES[p]) { page = p; showPage(); } });
 window.api.getState().then((s) => { if (!state) init(s); });
