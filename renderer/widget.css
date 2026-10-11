@@ -16,7 +16,7 @@ body { padding: 8px; }
 button { font: inherit; color: inherit; -webkit-app-region: no-drag; cursor: pointer; }
 
 .card {
-  height: 100%; border-radius: 28px; padding: 18px 20px; position: relative; overflow: hidden; -webkit-app-region: drag;
+  height: 100%; border-radius: var(--radius, 28px); padding: 18px 20px; position: relative; overflow: hidden;
   background: linear-gradient(160deg, rgba(var(--card-a), var(--wo)), rgba(var(--card-b), var(--wo)));
   border: 1px solid var(--edge);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.2);
@@ -183,3 +183,31 @@ textarea.inp { flex: 1; resize: none; line-height: 1.45; font-size: 14px; backgr
 .head-row { display: flex; justify-content: space-between; align-items: center; }
 .head-row button { background: none; border: 0; font-size: 11.5px; color: var(--muted); margin-bottom: 10px; margin-right: 22px; }
 .head-row button:hover { color: var(--text); }
+
+/* drag, resize and options */
+.card.dragging { transform: scale(1.03); box-shadow: 0 22px 46px rgba(0, 0, 0, 0.45); cursor: grabbing; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.card.pop { animation: popin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes popin { from { transform: scale(0.9); opacity: 0.4; } }
+body.noborder .card { border-color: transparent; }
+body.noshadow .card { box-shadow: none; }
+.row[hidden], .g[hidden] { display: none; }
+.g .fg.p { stroke: #bf5af2; }
+
+/* gpu, network, countdown, quote */
+.gpu { display: flex; align-items: center; gap: 16px; }
+.gst { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.st small { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.st b { font-size: 16px; font-weight: 500; }
+.vr { margin-top: 14px; }
+.vr .top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+#vf { background: #bf5af2; }
+.net { display: flex; justify-content: space-between; gap: 12px; }
+.net small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.net b { font: 300 26px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+.net > div:first-child b { color: var(--green); }
+.net > div:last-child b { color: var(--blue); }
+.cd { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.cdn { font: 200 68px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; color: var(--orange); }
+.cdl { font-size: 14px; font-weight: 500; margin-top: 4px; }
+.qt { flex: 1; display: flex; align-items: center; font: 300 20px/1.3 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+.qa { font-size: 12px; margin-top: 6px; }

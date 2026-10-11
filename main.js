@@ -28,7 +28,7 @@ const WIDGETS = {
   clock: { title: 'Clock', size: [290, 180] },
   worldclock: { title: 'World Clock', size: [300, 230] },
   weather: { title: 'Weather', size: [330, 280] },
-  system: { title: 'System Monitor', size: [310, 260] },
+  system: { title: 'System Monitor', size: [340, 400] },
   specs: { title: 'PC Specs', size: [360, 480] },
   disks: { title: 'Storage', size: [310, 240] },
   calendar: { title: 'Calendar', size: [300, 310] },
@@ -38,7 +38,13 @@ const WIDGETS = {
   notes: { title: 'Notes', size: [300, 290] },
   dock: { title: 'Frequent Apps', size: [340, 180] },
   clipboard: { title: 'Clipboard', size: [340, 350] },
+  gpu: { title: 'GPU', size: [320, 260] },
+  network: { title: 'Network', size: [320, 240] },
+  countdown: { title: 'Countdown', size: [290, 190] },
+  quote: { title: 'Daily Quote', size: [330, 180] },
 };
+const SIZES = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
+const SIZE_LABELS = { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
 const ENGINES = {
   google: 'https://www.google.com/search?q=',
   bing: 'https://www.bing.com/search?q=',
@@ -54,6 +60,15 @@ const DEFAULTS = {
   launchAtLogin: false,
   theme: 'system',
   accent: '#8b95ff',
+  widgetRadius: 28,
+  widgetBorder: true,
+  widgetShadow: true,
+  snapToGrid: true,
+  gridCollisions: true,
+  autoScale: true,
+  launcherRadius: 22,
+  launcherWidth: 700,
+  launcherTop: 20,
   tint: 0.45,
   animations: true,
   clipboard: true,
@@ -65,9 +80,10 @@ const DEFAULTS = {
     clock: { h24: false, seconds: true, analog: false },
     worldclock: { zones: 'America/New_York,Europe/London,Asia/Tokyo' },
     weather: { city: 'London', units: 'c' },
-    system: { graph: true, battery: true },
+    system: { graph: true, battery: true, info: true, gpu: true },
     specs: { host: true, user: true, os: true, cpu: true, gpu: true, ram: true, screen: true, ip: true, uptime: true, rig: true },
     calendar: { mondayFirst: true },
+    countdown: { title: 'New Year', date: '2027-01-01' },
   },
 };
 
@@ -102,6 +118,7 @@ function saveSettings() {
 }
 
 const state = () => ({
+  sizes: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, settings.widgets[t]?.size || 'm'])),
   prefs,
   open: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, !!widgetWins[t]])),
   widgets: Object.fromEntries(Object.entries(WIDGETS).map(([k, v]) => [k, v.title])),
@@ -129,7 +146,8 @@ function onPref(key) {
   else if (key === 'theme') nativeTheme.themeSource = prefs.theme;
   else if (key === 'spotlightStyle') { const old = win; createWindow(); old.destroy(); }
   else if (key === 'widgetMode') { ensurePoller(); applyVisibility(); }
-  else if (key === 'widgetScale') for (const [t, w] of Object.entries(widgetWins)) sizeWidget(t, w);
+  else if (key === 'widgetScale' || key === 'autoScale') relayoutAll();
+  else if (key === 'launcherWidth') win.setContentSize(winWidth(), win.getContentSize()[1]);
   else if (key === 'clipboard') clipTimerSet();
   else if (key === 'launchAtLogin') app.setLoginItemSettings({ openAtLogin: !!prefs.launchAtLogin });
 }
@@ -151,7 +169,7 @@ function startIndex() {
 }
 
 // ---------- search ----------
-function commandList() {
+function commandList(q = '') {
   return [
     { id: 'winsettings', title: 'Windows Settings', sub: 'Open Windows Settings', kw: 'control panel' },
     { id: 'prefs', title: 'Spotlight Settings', sub: 'Customize Spotlight and widgets', kw: 'preferences options customize' },
@@ -160,6 +178,7 @@ function commandList() {
     { id: 'lock', title: 'Lock PC', sub: 'Lock this computer', kw: 'lock screen' },
     { id: 'peek', title: 'Peek widgets', sub: 'Show or hide widgets on top', kw: 'widgets show hide' },
     ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title} widget`, sub: 'Floating widget', kw: 'widget' })),
+    ...(/size|small|medium|large/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: 'resize size widget' }))) : []),
     { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh' },
     { id: 'quit', title: 'Quit Spotlight', sub: 'Exit the launcher', kw: 'exit close' },
   ];
@@ -255,7 +274,7 @@ function search(raw) {
     consider(it, s);
   }
   if (S.commands && !filtered) {
-    for (const c of commandList()) {
+    for (const c of commandList(q)) {
       const l = `${c.title} ${c.kw}`.toLowerCase();
       const s = scoreName(l, q, words) || (l.split(' ').some((w) => w.startsWith(q)) ? 650 : 0);
       if (s) consider({ cmd: c }, s + 100);
@@ -276,7 +295,7 @@ function search(raw) {
 
 // ---------- launcher window ----------
 const PAD = () => (prefs.spotlightStyle === 'rounded' ? 18 : 0);
-const winWidth = () => WIDTH + PAD() * 2;
+const winWidth = () => prefs.launcherWidth + PAD() * 2;
 
 function createWindow() {
   const rounded = prefs.spotlightStyle === 'rounded';
@@ -294,7 +313,7 @@ function createWindow() {
 function toggle() {
   if (win.isVisible()) return win.hide();
   const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-  win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * 0.2 - PAD()));
+  win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * (prefs.launcherTop / 100) - PAD()));
   win.show();
   win.focus();
   win.webContents.send('shown');
@@ -316,7 +335,7 @@ function openSettings() {
 // ---------- widgets ----------
 let desktopFocus = false, peek = false, flashing = false, flashTimer;
 const topMost = () => prefs.widgetMode === 'top' || peek || flashing;
-const shouldShow = () => topMost() || (prefs.widgetMode === 'desktop' && desktopFocus);
+const shouldShow = () => topMost() || (prefs.widgetMode === 'desktop' && pollerOk);
 
 function applyVisibility() {
   const show = shouldShow();
@@ -327,6 +346,7 @@ function applyVisibility() {
     if (show) {
       if (!w.isVisible()) w.showInactive();
       w.webContents.send('vis', true);
+      pinWidget(w);
     } else if (w.isVisible()) {
       w.webContents.send('vis', false);
       w.__hide = setTimeout(() => { if (!w.isDestroyed() && !shouldShow()) w.hide(); }, 260);
@@ -341,36 +361,65 @@ function flash(ms) {
   flashTimer = setTimeout(() => { flashing = false; applyVisibility(); }, ms);
 }
 
+function scaleFor(type, w) {
+  const d = w ? screen.getDisplayMatching(w.getBounds()) : screen.getPrimaryDisplay();
+  const auto = prefs.autoScale ? Math.max(0.8, Math.min(1.8, d.workArea.height / 1080)) : 1;
+  return prefs.widgetScale * (SIZES[settings.widgets[type]?.size] || 1) * auto;
+}
+
 function sizeWidget(type, w) {
-  const s = prefs.widgetScale;
+  const f = scaleFor(type, w);
   const [bw, bh] = WIDGETS[type].size;
-  w.setContentSize(Math.round(bw * s), Math.round(bh * s));
-  w.webContents.setZoomFactor(s);
+  w.setContentSize(Math.round(bw * f), Math.round(bh * f));
+  w.webContents.setZoomFactor(f);
+}
+
+function persistPos(w) {
+  const t = Object.keys(widgetWins).find((k) => widgetWins[k] === w);
+  if (!t || w.isDestroyed()) return;
+  const [x, y] = w.getPosition();
+  settings.widgets[t] = { ...settings.widgets[t], x, y, open: true };
+  saveSettings();
+  pinAll();
+}
+
+const grid = require('./grid')({ prefs: () => prefs, wins: () => widgetWins, persist: persistPos });
+
+function relayoutAll() {
+  for (const [t, w] of Object.entries(widgetWins)) {
+    if (w.isDestroyed()) continue;
+    sizeWidget(t, w);
+    grid.settle(w);
+  }
+}
+
+function setWidgetSize(type, key) {
+  if (!WIDGETS[type] || !SIZES[key]) return;
+  settings.widgets[type] = { ...settings.widgets[type], size: key };
+  saveSettings();
+  const w = widgetWins[type];
+  if (!w) { openWidget(type); flash(4000); }
+  else { sizeWidget(type, w); grid.settle(w); w.webContents.send('resized'); }
+  broadcastState();
 }
 
 function openWidget(type) {
   if (widgetWins[type]) return;
   const [bw, bh] = WIDGETS[type].size;
-  const s = prefs.widgetScale;
   const saved = settings.widgets[type] || {};
-  const n = Object.keys(widgetWins).length;
-  const d = screen.getPrimaryDisplay().workArea;
+  const f = scaleFor(type, null);
+  const ww = Math.round(bw * f), wh = Math.round(bh * f);
+  const pos = saved.x !== undefined ? { x: saved.x, y: saved.y } : grid.defaultRect(ww, wh, screen.getPrimaryDisplay());
   const w = new BrowserWindow({
-    width: Math.round(bw * s), height: Math.round(bh * s),
-    x: saved.x ?? d.x + d.width - Math.round(bw * s) - 24 - (n % 3) * 30,
-    y: saved.y ?? d.y + 24 + n * 40,
+    width: ww, height: wh, x: pos.x, y: pos.y,
     frame: false, transparent: true, resizable: false, skipTaskbar: true, hasShadow: false, show: false,
     focusable: true, webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   widgetWins[type] = w;
   w.loadFile(path.join(__dirname, 'renderer', 'widget.html'), { query: { type } });
-  w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(prefs.widgetScale));
+  w.webContents.on('did-finish-load', () => sizeWidget(type, w));
+  w.on('blur', pinAll);
   w.once('ready-to-show', () => { w.__ready = true; applyVisibility(); });
-  w.on('moved', () => {
-    const [x, y] = w.getPosition();
-    settings.widgets[type] = { ...settings.widgets[type], x, y, open: true };
-    saveSettings();
-  });
   w.on('closed', () => {
     delete widgetWins[type];
     if (!quitting) { settings.widgets[type] = { ...settings.widgets[type], open: false }; saveSettings(); broadcastState(); }
@@ -386,49 +435,64 @@ function toggleWidget(type) {
   else { openWidget(type); flash(4000); }
 }
 
-// Foreground-window poller: shows widgets only while the desktop is focused.
+// PowerShell helper: reports the foreground window and pins widgets just above the desktop (below every app).
 const POLL_SCRIPT = `
 Add-Type -TypeDefinition @'
-using System;using System.Text;using System.Runtime.InteropServices;
+using System;using System.Text;using System.Threading;using System.Runtime.InteropServices;
 public static class FG{
 [DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();
 [DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern int GetClassName(IntPtr h,StringBuilder s,int n);
 [DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
+[DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern IntPtr FindWindow(string c,string t);
+[DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern IntPtr FindWindowEx(IntPtr p,IntPtr a,string c,string t);
+[DllImport("user32.dll")]public static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int cx,int cy,uint f);
+public delegate bool EnumProc(IntPtr h,IntPtr l);
+[DllImport("user32.dll")]public static extern bool EnumWindows(EnumProc p,IntPtr l);
+static IntPtr Host(){
+ IntPtr pm=FindWindow("Progman",null);
+ if(pm!=IntPtr.Zero && FindWindowEx(pm,IntPtr.Zero,"SHELLDLL_DefView",null)!=IntPtr.Zero) return pm;
+ IntPtr found=IntPtr.Zero;
+ EnumWindows(delegate(IntPtr h,IntPtr l){ StringBuilder sb=new StringBuilder(64); GetClassName(h,sb,64); if(sb.ToString()=="WorkerW" && FindWindowEx(h,IntPtr.Zero,"SHELLDLL_DefView",null)!=IntPtr.Zero){found=h;return false;} return true;},IntPtr.Zero);
+ return found!=IntPtr.Zero?found:pm;
+}
+public static void Pin(IntPtr w){
+ IntPtr host=Host();
+ uint F=0x0001|0x0002|0x0010;
+ SetWindowPos(w,new IntPtr(1),0,0,0,0,F);
+ if(host!=IntPtr.Zero) SetWindowPos(host,w,0,0,0,0,F);
+}
+public static void Watch(){
+ Thread t=new Thread(delegate(){ string last=""; while(true){ IntPtr h=GetForegroundWindow(); StringBuilder sb=new StringBuilder(256); GetClassName(h,sb,256); uint p; GetWindowThreadProcessId(h,out p); string o=sb.ToString()+"|"+p; if(o!=last){last=o;Console.Out.WriteLine(o);Console.Out.Flush();} Thread.Sleep(250);} });
+ t.IsBackground=true; t.Start();
+}
 }
 '@
-$last=''
-while($true){
- $h=[FG]::GetForegroundWindow()
- $sb=New-Object System.Text.StringBuilder 256
- [void][FG]::GetClassName($h,$sb,256)
- $p=[uint32]0
- [void][FG]::GetWindowThreadProcessId($h,[ref]$p)
- $o=$sb.ToString()+'|'+$p
- if($o -ne $last){$last=$o;[Console]::Out.WriteLine($o);[Console]::Out.Flush()}
- Start-Sleep -Milliseconds 250
-}`;
-const IGNORE_CLASSES = new Set([
-  '', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'TaskListThumbnailWnd', 'MultitaskingViewFrame', 'XamlExplorerHostIslandWindow',
-  'ForegroundStaging', 'TaskSwitcherWnd', 'Windows.UI.Core.CoreWindow', 'NotifyIconOverflowWindow', 'TopLevelWindowForOverflowXamlIsland',
-]);
+[FG]::Watch()
+while(($line=[Console]::In.ReadLine()) -ne $null){ $p=$line.Split(' '); if($p[0] -eq 'pin'){ try{ [FG]::Pin([IntPtr][long]$p[1]) }catch{} } }`;
 let poller = null, pollerOk = false;
 
-function onForeground(cls, pid) {
-  if (pid === process.pid || IGNORE_CLASSES.has(cls)) return;
-  const d = cls === 'Progman' || cls === 'WorkerW';
-  if (d !== desktopFocus) { desktopFocus = d; applyVisibility(); }
+function pinWidget(w) {
+  if (!poller || !pollerOk || prefs.widgetMode !== 'desktop' || topMost() || w.isDestroyed() || !w.isVisible()) return;
+  try { poller.stdin.write(`pin ${w.getNativeWindowHandle().readBigUInt64LE(0)}\n`); } catch { /* helper exited */ }
+}
+let pinTimer;
+function pinAll() {
+  clearTimeout(pinTimer);
+  pinTimer = setTimeout(() => Object.values(widgetWins).forEach(pinWidget), 40);
 }
 
 function ensurePoller() {
   if (prefs.widgetMode !== 'desktop') {
     if (poller) { poller.kill(); poller = null; }
-    pollerOk = false; desktopFocus = false;
+    pollerOk = false;
+    applyVisibility();
     broadcastState();
     return;
   }
   if (poller) return;
   poller = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(POLL_SCRIPT, 'utf16le').toString('base64')],
-    { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+  poller.stdin.on('error', () => {});
   let buf = '';
   poller.stdout.on('data', (d) => {
     buf += d;
@@ -436,13 +500,13 @@ function ensurePoller() {
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i).trim();
       buf = buf.slice(i + 1);
-      const [cls, pid] = line.split('|');
+      const pid = line.split('|')[1];
       if (pid === undefined) continue;
-      if (!pollerOk) { pollerOk = true; broadcastState(); }
-      onForeground(cls, Number(pid));
+      if (!pollerOk) { pollerOk = true; applyVisibility(); broadcastState(); }
+      else if (Number(pid) !== process.pid) pinAll();
     }
   });
-  poller.on('exit', () => { poller = null; pollerOk = false; broadcastState(); });
+  poller.on('exit', () => { poller = null; pollerOk = false; applyVisibility(); broadcastState(); });
 }
 
 // ---------- clipboard history (memory only) ----------
@@ -507,26 +571,70 @@ async function gpuVram() {
   return null;
 }
 
-async function getSpecs() {
-  if (!staticSpecs) {
-    const cpus = os.cpus();
-    let osName = os.version();
-    if (parseInt(os.release().split('.')[2], 10) >= 22000) osName = osName.replace('Windows 10', 'Windows 11');
-    const gpu = await gpuNames();
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
+// Fast, synchronous basics so the specs widget always has something to show.
+function getSpecs() {
+  let user = 'user';
+  try { user = os.userInfo().username; } catch { /* no user info */ }
+  const build = os.release().split('.')[2];
+  let osName = typeof os.version === 'function' ? os.version() : 'Windows';
+  if (parseInt(build, 10) >= 22000) osName = osName.replace('Windows 10', 'Windows 11');
+  const cpus = os.cpus();
+  const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
+  const screens = screen.getAllDisplays().map((d) => `${Math.round(d.size.width * d.scaleFactor)}x${Math.round(d.size.height * d.scaleFactor)} @ ${Math.round(d.displayFrequency)}Hz`);
+  return {
+    host: os.hostname(), user, os: `${osName} (build ${build})`,
+    cpu: (cpus[0]?.model || 'Unknown').replace(/\s+/g, ' ').trim(), cores: `${cpus.length} threads`,
+    ram: os.totalmem(), ip, screens, uptime: os.uptime(),
+  };
+}
+
+// Slower hardware detection (systeminformation, then PowerShell/wmic), cached after the first success.
+let hwPromise;
+function getHw() {
+  hwPromise ||= (async () => {
+    let gpu = [], siVram = null;
+    try {
+      const si = require('systeminformation');
+      const g = await withTimeout(si.graphics(), 12000);
+      const ctl = (g.controllers || []).filter((x) => x.model && !VIRTUAL_GPU.test(`${x.vendor || ''} ${x.model}`));
+      gpu = ctl.map((x) => x.model);
+      const v = ctl.find((x) => x.vram);
+      if (v) siVram = v.vram >= 1024 ? `${Math.round(v.vram / 1024)}GB` : `${v.vram}MB`;
+    } catch (e) { logError(e); }
+    if (!gpu.length) { try { gpu = await withTimeout(gpuNames(), 15000); } catch { gpu = []; } }
     const rig = GFN_RIGS.find((r) => gpu.some((n) => r.match.test(n))) || null;
     let gfn = false;
     try { gfn = fs.statSync(GFN_LOG).size > 0; } catch { /* not a GeForce NOW session */ }
-    staticSpecs = {
-      host: os.hostname(), user: os.userInfo().username, os: `${osName} (build ${os.release().split('.')[2]})`,
-      cpu: rig ? rig.cpu : (cpus[0]?.model || 'Unknown').replace(/\s+/g, ' ').trim(),
-      cores: rig ? rig.allocation : `${cpus.length} threads`,
-      ram: os.totalmem(), ramLabel: rig ? rig.memory : null,
-      gpu, vram: rig ? rig.vram : await gpuVram(), rig, gfn,
-    };
+    const vram = rig ? rig.vram : (await gpuVram().catch(() => null)) || siVram;
+    return { gpu, vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
+  })().then((r) => { if (!r.gpu.length) hwPromise = null; return r; });
+  return hwPromise;
+}
+
+let nvSmi;
+function nvidiaPath() {
+  if (nvSmi === undefined) {
+    const pf = process.env.ProgramW6432 || process.env.ProgramFiles;
+    nvSmi = [pf && path.join(pf, 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'), path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'nvidia-smi.exe')]
+      .find((p) => p && fs.existsSync(p)) || 'nvidia-smi.exe';
   }
-  const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
-  const screens = screen.getAllDisplays().map((d) => `${Math.round(d.size.width * d.scaleFactor)}x${Math.round(d.size.height * d.scaleFactor)} @ ${Math.round(d.displayFrequency)}Hz`);
-  return { ...staticSpecs, ip, screens, uptime: os.uptime() };
+  return nvSmi;
+}
+
+let gpuCache = { t: 0, d: null };
+async function getGpuStats() {
+  if (Date.now() - gpuCache.t < 1500) return gpuCache.d;
+  const row = lines(await runText(nvidiaPath(), ['--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.gr', '--format=csv,noheader,nounits'], 3000))[0];
+  let d = null;
+  if (row) {
+    const [name, util, temp, memUsed, memTotal, power, clock] = row.split(',').map((s) => s.trim());
+    const n = (x) => { const v = Number(x); return Number.isFinite(v) ? v : null; };
+    d = { name, util: n(util), temp: n(temp), memUsed: n(memUsed), memTotal: n(memTotal), power: n(power), clock: n(clock) };
+  }
+  gpuCache = { t: d ? Date.now() : Date.now() + 58500, d };
+  return d;
 }
 
 let lastCpu = null;
@@ -576,7 +684,9 @@ function runCommand(id) {
     case 'reindex': startIndex(); break;
     case 'update': checkUpdates(true); break;
     case 'quit': app.quit(); break;
-    default: if (id.startsWith('w-')) toggleWidget(id.slice(2));
+    default:
+      if (id.startsWith('size-')) { const [, t, k] = id.split('-'); setWidgetSize(t, k); }
+      else if (id.startsWith('w-')) toggleWidget(id.slice(2));
   }
 }
 
@@ -639,7 +749,7 @@ ipcMain.on('reset', () => {
   saveSettings();
   nativeTheme.themeSource = prefs.theme;
   registerKeys(); ensurePoller(); clipTimerSet();
-  for (const [t, w] of Object.entries(widgetWins)) sizeWidget(t, w);
+  relayoutAll();
   applyVisibility();
   broadcastState();
 });
@@ -658,6 +768,34 @@ ipcMain.handle('stats', () => {
   };
 });
 ipcMain.handle('specs', () => getSpecs());
+ipcMain.handle('specs-gpu', () => getHw());
+ipcMain.handle('gpu-stats', () => getGpuStats());
+ipcMain.handle('net', async () => {
+  try {
+    const r = await withTimeout(require('systeminformation').networkStats(), 3000);
+    const x = r.find((i) => i.operstate === 'up') || r[0];
+    return x ? { down: Math.max(0, x.rx_sec || 0), up: Math.max(0, x.tx_sec || 0), iface: x.iface } : null;
+  } catch { return null; }
+});
+ipcMain.on('drag-start', (e) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) grid.startDrag(w); });
+ipcMain.on('drag-end', () => grid.endDrag(true));
+ipcMain.on('arrange', () => grid.arrange());
+ipcMain.on('set-size', (_e, t, k) => setWidgetSize(String(t), String(k)));
+ipcMain.on('widget-menu', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  const t = Object.keys(widgetWins).find((k) => widgetWins[k] === w);
+  if (!t) return;
+  const cur = settings.widgets[t]?.size || 'm';
+  Menu.buildFromTemplate([
+    { label: WIDGETS[t].title, enabled: false },
+    { type: 'separator' },
+    { label: 'Size', submenu: Object.entries(SIZE_LABELS).map(([k, l]) => ({ label: l, type: 'radio', checked: cur === k, click: () => setWidgetSize(t, k) })) },
+    { label: 'Auto-arrange widgets', click: () => grid.arrange() },
+    { label: 'Widget settings...', click: openSettings },
+    { type: 'separator' },
+    { label: 'Close widget', click: () => w.close() },
+  ]).popup({ window: w });
+});
 ipcMain.handle('disks', () => {
   const out = [];
   for (let c = 67; c <= 90; c++) {
@@ -762,6 +900,8 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = prefs.theme;
   createWindow();
   createTray();
+  screen.on('display-metrics-changed', relayoutAll);
+  screen.on('display-removed', relayoutAll);
   const hotkeyOk = registerKeys();
   if (firstRun || !hotkeyOk) {
     new Notification({

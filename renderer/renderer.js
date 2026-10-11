@@ -103,6 +103,7 @@ function applyPrefs(p) {
   const r = document.documentElement.style;
   const rounded = p.spotlightStyle === 'rounded';
   r.setProperty('--accent', p.accent);
+  r.setProperty('--lr', p.launcherRadius + 'px');
   r.setProperty('--ta', rounded ? 0.7 + p.tint * 0.28 : p.tint);
   r.setProperty('--pad', rounded ? '18px' : '0px');
   recents = p.search.recents;

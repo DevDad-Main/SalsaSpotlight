@@ -1,5 +1,6 @@
 const type = new URLSearchParams(location.search).get('type');
 const el = document.getElementById('content');
+const card = document.querySelector('.card');
 document.getElementById('x').addEventListener('click', () => window.api.closeWidget());
 
 const $ = (s, r = el) => r.querySelector(s);
@@ -7,16 +8,22 @@ const pad = (n) => String(n).padStart(2, '0');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const head = (t, extra = '') => `<div class="label"><i class="dot"></i>${t}${extra}</div>`;
 const gb = (b) => (b / 1024 ** 3).toFixed(b > 1e11 ? 0 : 1) + ' GB';
+const sparkSvg = '<svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><path id="sa" class="sa"/><path id="sl" class="sl"/></svg>';
+function drawSpark(hist, max) {
+  const pts = hist.map((v, i) => `${(i * 200) / (hist.length - 1)},${38 - (v / max) * 36}`).join('L');
+  $('#sl').setAttribute('d', 'M' + pts);
+  $('#sa').setAttribute('d', `M0,40L${pts}L200,40Z`);
+}
 
-let timers = [], tasks = [], paused = false, cleanups = [], state = null, mountKey = '', mountSeq = 0;
+let timers = [], tasks = [], paused = false, state = null, mountKey = '', mountSeq = 0;
 const every = (fn, ms) => { fn(); tasks.push(fn); timers.push(setInterval(() => { if (!paused) fn(); }, ms)); };
 
 const CIRC = 2 * Math.PI * 38;
-const gauge = (id, cls, label) => `<div class="g"><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg ${cls}" id="${id}" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/></svg><div class="v"><span id="${id}v">0%</span><small>${label}</small></div></div>`;
+const gauge = (id, cls, label, attr = '') => `<div class="g" ${attr}><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg ${cls}" id="${id}" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/></svg><div class="v"><span id="${id}v">0%</span><small>${label}</small></div></div>`;
 function setGauge(id, pct) {
   const c = $('#' + id);
   c.style.strokeDashoffset = CIRC * (1 - Math.min(pct, 100) / 100);
-  c.classList.toggle('o', pct > 85);
+  c.classList.toggle('o', pct > 90);
   $('#' + id + 'v').textContent = Math.round(pct) + '%';
 }
 
@@ -32,6 +39,16 @@ const WX = (code, day = true) => {
   if (code <= 86) return ['🌨️', 'Snow showers'];
   return ['⛈️', 'Thunderstorm'];
 };
+
+const QUOTES = [
+  ['The secret of getting ahead is getting started.', 'Mark Twain'], ['Simplicity is the ultimate sophistication.', 'Leonardo da Vinci'],
+  ['Well done is better than well said.', 'Benjamin Franklin'], ['Make it work, make it right, make it fast.', 'Kent Beck'],
+  ['What we think, we become.', 'Buddha'], ['Stay hungry, stay foolish.', 'Steve Jobs'], ['Fortune favours the bold.', 'Virgil'],
+  ['Done is better than perfect.', 'Sheryl Sandberg'], ['The best way out is always through.', 'Robert Frost'],
+  ['Small steps every day.', 'Unknown'], ['Energy and persistence conquer all things.', 'Benjamin Franklin'],
+  ['It always seems impossible until it is done.', 'Nelson Mandela'], ['Quality is not an act, it is a habit.', 'Aristotle'],
+  ['Dream big, start small.', 'Unknown'],
+];
 
 const W = {
   clock(o) {
@@ -69,7 +86,7 @@ const W = {
       const now = new Date();
       const local = now.toLocaleDateString('en-CA');
       rows.replaceChildren();
-      zones.forEach((z, i) => {
+      zones.forEach((z) => {
         const row = document.createElement('div');
         row.className = 'row';
         row.style.animation = 'none';
@@ -101,7 +118,7 @@ const W = {
       if (d.error) { box.innerHTML = '<div class="wmsg"></div>'; $('.wmsg').textContent = `${d.error} - set a city in Settings`; return; }
       const [icon, text] = WX(d.code, d.isDay);
       const c = d.code;
-      document.querySelector('.card').dataset.sky = c >= 95 ? 'storm' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c === 3 || (c >= 45 && c <= 48) ? 'cloud' : d.isDay ? 'day' : 'night';
+      card.dataset.sky = c >= 95 ? 'storm' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c === 3 || (c >= 45 && c <= 48) ? 'cloud' : d.isDay ? 'day' : 'night';
       const hours = d.hours.map((h) => `<div class="hour">${esc(h.h.slice(0, 2))}<span>${WX(h.code, true)[0]}</span><b>${Math.round(h.t)}°</b></div>`).join('');
       box.innerHTML = `<div class="wcity">${esc(d.city)}, ${esc(d.country || '')} <span class="muted">- ${esc(text)}</span></div><div class="wmain"><div class="wicon">${icon}</div><div class="wtemp grad">${Math.round(d.temp)}${esc(d.unit)}</div></div>`
         + `<div class="wmeta"><span>Feels ${Math.round(d.feels)}°</span><span>H ${Math.round(d.hi)}° L ${Math.round(d.lo)}°</span><span>💧 ${d.humidity}%</span><span>💨 ${Math.round(d.wind)} ${esc(d.windUnit)}</span></div>`
@@ -110,50 +127,71 @@ const W = {
   },
 
   system(o) {
-    el.innerHTML = `${head('System')}<div class="gauges">${gauge('c', 'a', 'CPU')}${gauge('m', 'g', 'RAM')}</div>`
-      + (o.graph ? '<svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><path id="sa" class="sa"/><path id="sl" class="sl"/></svg>' : '') + '<div class="foot" id="f"></div>';
+    const row = (id, icon, label, hidden) => `<div class="row" id="r${id}"${hidden ? ' hidden' : ''}><span class="ri">${icon}</span><div><small>${label}</small><b id="i${id}">...</b></div></div>`;
+    el.innerHTML = `${head('System')}<div class="gauges">${gauge('c', 'a', 'CPU')}${gauge('m', 'g', 'RAM')}${o.gpu ? gauge('u', 'p', 'GPU', 'id="gw" hidden') : ''}</div>`
+      + (o.graph ? sparkSvg : '')
+      + (o.info ? `<div class="rows">${row(1, '🧠', 'Processor')}${row(2, '💾', 'Memory')}${o.gpu ? row(3, '🎮', 'Graphics', true) : ''}</div>` : '')
+      + '<div class="foot" id="f"></div>';
+    const tk = mountSeq;
+    if (o.info) {
+      window.api.specs().then((sp) => { if (tk === mountSeq && $('#i1')) $('#i1').textContent = `${sp.cpu} (${sp.cores})`; }).catch(() => {});
+      window.api.specsGpu().then((h) => { if (tk === mountSeq && h.cpu && $('#i1')) $('#i1').textContent = `${h.cpu} (${h.cores})`; }).catch(() => {});
+    }
     const hist = Array(40).fill(0);
     every(async () => {
-      const s = await window.api.stats();
-      if (!$('#c')) return;
+      const [s, g] = await Promise.all([window.api.stats(), o.gpu ? window.api.gpuStats() : null]);
+      if (tk !== mountSeq || !$('#c')) return;
       setGauge('c', s.cpu);
       setGauge('m', s.mem);
-      if (o.graph) {
-        hist.push(s.cpu); hist.shift();
-        const pts = hist.map((v, i) => `${(i * 200) / 39},${38 - v * 0.36}`).join('L');
-        $('#sl').setAttribute('d', 'M' + pts);
-        $('#sa').setAttribute('d', `M0,40L${pts}L200,40Z`);
+      if (o.graph) { hist.push(s.cpu); hist.shift(); drawSpark(hist, 100); }
+      if (o.info) $('#i2').textContent = `${s.memUsed.toFixed(1)} / ${s.memTotal.toFixed(1)} GB (${(s.memTotal - s.memUsed).toFixed(1)} free)`;
+      if (g && o.gpu) {
+        $('#gw').hidden = false;
+        setGauge('u', g.util ?? 0);
+        if (o.info) {
+          $('#r3').hidden = false;
+          const vr = g.memUsed != null && g.memTotal ? ` | ${(g.memUsed / 1024).toFixed(1)}/${(g.memTotal / 1024).toFixed(0)} GB` : '';
+          $('#i3').textContent = `${g.name}${vr}${g.temp != null ? ` | ${g.temp}°C` : ''}`;
+        }
       }
       let batt = '';
-      if (o.battery) { try { const b = await navigator.getBattery(); batt = ` | 🔋 ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`; } catch { /* no battery */ } }
-      $('#f').textContent = `${s.memUsed.toFixed(1)} / ${s.memTotal.toFixed(0)} GB | Up ${Math.floor(s.uptime / 3600)}h ${Math.floor(s.uptime / 60) % 60}m${batt}`;
-    }, 1000);
+      if (o.battery) { try { const b = await navigator.getBattery(); if (b.level < 1 || !b.charging) batt = ` | 🔋 ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`; } catch { /* no battery */ } }
+      $('#f').textContent = `Up ${Math.floor(s.uptime / 3600)}h ${Math.floor(s.uptime / 60) % 60}m${batt}`;
+    }, 1500);
   },
 
   async specs(o) {
     const tk = mountSeq;
     el.innerHTML = `${head('PC Specs')}<div class="rows"><div class="wmsg">Reading hardware...</div></div>`;
-    const s = await window.api.specs();
+    let base;
+    try { base = await window.api.specs(); } catch { base = null; }
     if (tk !== mountSeq) return;
-    const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
-    const rows = [
-      ['rig', 'GeForce NOW rig', '☁️', s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
-      ['host', 'Device', '🖥️', s.host], ['user', 'User', '👤', s.user], ['os', 'Windows', '🪟', s.os],
-      ['cpu', 'Processor', '🧠', `${s.cpu} (${s.cores})`], ['gpu', 'Graphics', '🎮', (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '')],
-      ['ram', 'Memory', '💾', s.ramLabel ? `${s.ramLabel} allocated` : gb(s.ram) + ' installed'], ['screen', 'Display', '🖵', s.screens.join(' + ')],
-      ['ip', 'Network', '🌐', s.ip || 'Offline'], ['uptime', 'Uptime', '⏱️', up],
-    ].filter((r) => o[r[0]] && r[3]);
-    const box = $('.rows');
-    box.replaceChildren();
-    rows.forEach(([, label, icon, value], i) => {
-      const r = document.createElement('div');
-      r.className = 'row';
-      r.style.animationDelay = i * 45 + 'ms';
-      r.innerHTML = `<span class="ri">${icon}</span><div><small>${label}</small><b></b></div>`;
-      $('b', r).textContent = value;
-      r.title = value;
-      box.append(r);
-    });
+    if (!base) { $('.rows').innerHTML = '<div class="wmsg">Could not read hardware info</div>'; return; }
+    const draw = (s) => {
+      if (tk !== mountSeq) return;
+      const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
+      const gpuText = s.gpu === undefined ? 'Detecting...' : (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '');
+      const rows = [
+        ['rig', 'GeForce NOW rig', '☁️', s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
+        ['host', 'Device', '🖥️', s.host], ['user', 'User', '👤', s.user], ['os', 'Windows', '🪟', s.os],
+        ['cpu', 'Processor', '🧠', `${s.cpu} (${s.cores})`], ['gpu', 'Graphics', '🎮', gpuText],
+        ['ram', 'Memory', '💾', s.ramLabel ? `${s.ramLabel} allocated` : gb(s.ram) + ' installed'], ['screen', 'Display', '🖵', s.screens.join(' + ')],
+        ['ip', 'Network', '🌐', s.ip || 'Offline'], ['uptime', 'Uptime', '⏱️', up],
+      ].filter((r) => o[r[0]] && r[3]);
+      const box = $('.rows');
+      box.replaceChildren();
+      rows.forEach(([, label, icon, value], i) => {
+        const r = document.createElement('div');
+        r.className = 'row';
+        r.style.animationDelay = i * 40 + 'ms';
+        r.innerHTML = `<span class="ri">${icon}</span><div><small>${label}</small><b></b></div>`;
+        $('b', r).textContent = value;
+        r.title = value;
+        box.append(r);
+      });
+    };
+    draw(base);
+    window.api.specsGpu().then((hw) => draw({ ...base, ...Object.fromEntries(Object.entries(hw).filter(([, v]) => v != null)) })).catch(() => {});
   },
 
   disks() {
@@ -172,6 +210,66 @@ const W = {
         requestAnimationFrame(() => requestAnimationFrame(() => { $('.fill', n).style.width = used + '%'; }));
       });
     }, 60000);
+  },
+
+  gpu() {
+    el.innerHTML = `${head('GPU')}<div class="gpu">${gauge('u', 'p', 'GPU')}<div class="gst" id="gs"></div></div>`
+      + '<div class="vr"><div class="top"><span class="muted">VRAM</span><span id="vt"></span></div><div class="track"><div class="fill" id="vf"></div></div></div><div class="foot" id="gn"></div>';
+    const tk = mountSeq;
+    every(async () => {
+      const g = await window.api.gpuStats();
+      if (tk !== mountSeq || !$('#u')) return;
+      if (!g) { $('#gn').textContent = 'No NVIDIA GPU detected'; return; }
+      setGauge('u', g.util ?? 0);
+      const dash = (v, unit) => (v == null ? '-' : `${Math.round(v)}${unit}`);
+      $('#gs').innerHTML = [['Temperature', dash(g.temp, '°C')], ['Power', dash(g.power, ' W')], ['Clock', dash(g.clock, ' MHz')]]
+        .map(([l, v]) => `<div class="st"><small>${l}</small><b>${esc(v)}</b></div>`).join('');
+      if (g.memTotal) {
+        $('#vt').textContent = `${(g.memUsed / 1024).toFixed(1)} / ${(g.memTotal / 1024).toFixed(0)} GB`;
+        $('#vf').style.width = (g.memUsed / g.memTotal) * 100 + '%';
+      }
+      $('#gn').textContent = g.name;
+    }, 1500);
+  },
+
+  network() {
+    el.innerHTML = `${head('Network')}<div class="net"><div><small>Download</small><b id="nd">0 KB/s</b></div><div><small>Upload</small><b id="nu">0 KB/s</b></div></div>${sparkSvg}<div class="foot" id="f"></div>`;
+    const tk = mountSeq;
+    const fmt = (b) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB/s` : `${Math.round(b / 1e3)} KB/s`);
+    const hist = Array(40).fill(0);
+    let ip = '';
+    window.api.specs().then((s) => { ip = s.ip || ''; }).catch(() => {});
+    every(async () => {
+      const n = await window.api.net();
+      if (tk !== mountSeq || !$('#nd')) return;
+      if (!n) { $('#f').textContent = 'Network stats unavailable'; return; }
+      hist.push(n.down); hist.shift();
+      drawSpark(hist, Math.max(1e5, ...hist));
+      $('#nd').textContent = fmt(n.down);
+      $('#nu').textContent = fmt(n.up);
+      $('#f').textContent = `${n.iface}${ip ? ` | ${ip}` : ''}`;
+    }, 2000);
+  },
+
+  countdown(o) {
+    const target = new Date(`${o.date}T00:00:00`);
+    el.innerHTML = `${head('Countdown')}<div class="cd"><div class="cdn" id="cn"></div><div class="cdl" id="cl"></div></div><div class="foot" id="cs"></div>`;
+    every(() => {
+      if (!$('#cn')) return;
+      if (Number.isNaN(target.getTime())) { $('#cn').textContent = '?'; $('#cl').textContent = 'Set a date (YYYY-MM-DD) in Settings'; return; }
+      const diff = target - new Date();
+      const days = Math.ceil(diff / 864e5);
+      $('#cn').textContent = days === 0 ? '🎉' : String(Math.abs(days));
+      $('#cl').textContent = days === 0 ? `Today: ${o.title}` : days > 0 ? `day${days === 1 ? '' : 's'} until ${o.title}` : `day${days === -1 ? '' : 's'} since ${o.title}`;
+      $('#cs').textContent = diff > 0 ? `${Math.floor(diff / 36e5) % 24}h ${Math.floor(diff / 6e4) % 60}m to go today` : '';
+    }, 30000);
+  },
+
+  quote() {
+    const [text, who] = QUOTES[Math.floor(Date.now() / 864e5) % QUOTES.length];
+    el.innerHTML = `${head('Quote of the day')}<div class="qt"></div><div class="qa muted"></div>`;
+    $('.qt').textContent = `\u201C${text}\u201D`;
+    $('.qa').textContent = `- ${who}`;
   },
 
   calendar(o) {
@@ -204,12 +302,13 @@ const W = {
 
   async progress() {
     const tk = mountSeq;
-    const s = await window.api.specs();
+    let user = 'there';
+    try { user = (await window.api.specs()).user; } catch { /* keep default */ }
     if (tk !== mountSeq) return;
     el.innerHTML = `${head('Progress')}<div class="hello grad" id="hi"></div><div id="pl"></div>`;
     const draw = () => {
       const n = new Date(), H = n.getHours();
-      $('#hi').textContent = `Good ${H < 5 ? 'night' : H < 12 ? 'morning' : H < 18 ? 'afternoon' : 'evening'}, ${s.user}`;
+      $('#hi').textContent = `Good ${H < 5 ? 'night' : H < 12 ? 'morning' : H < 18 ? 'afternoon' : 'evening'}, ${user}`;
       const day = (n - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5;
       const wd = ((n.getDay() + 6) % 7 + day) / 7;
       const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
@@ -219,8 +318,7 @@ const W = {
       const bars = [['Today', day, `${Math.round((1 - day) * 24)}h left`], ['This week', wd, `${Math.ceil((1 - wd) * 7)} days left`],
         ['This month', mo, `${dim - n.getDate()} days left`], [String(n.getFullYear()), yr, `${Math.ceil((ye - n) / 864e5)} days left`]];
       const box = $('#pl');
-      const first = !box.children.length;
-      if (first) bars.forEach(() => { const d = document.createElement('div'); d.className = 'pr'; d.innerHTML = '<div class="top"><span></span><span></span></div><div class="track"><div class="fill"></div></div>'; box.append(d); });
+      if (!box.children.length) bars.forEach(() => { const d = document.createElement('div'); d.className = 'pr'; d.innerHTML = '<div class="top"><span></span><span></span></div><div class="track"><div class="fill"></div></div>'; box.append(d); });
       bars.forEach(([l, v, t], i) => {
         const d = box.children[i];
         d.children[0].children[0].textContent = l;
@@ -352,7 +450,10 @@ function applyCss(p) {
   const r = document.documentElement.style;
   r.setProperty('--accent', p.accent);
   r.setProperty('--wo', p.widgetOpacity);
+  r.setProperty('--radius', p.widgetRadius + 'px');
   document.body.classList.toggle('noanim', !p.animations);
+  document.body.classList.toggle('noborder', !p.widgetBorder);
+  document.body.classList.toggle('noshadow', !p.widgetShadow);
 }
 
 function mount() {
@@ -360,12 +461,11 @@ function mount() {
   timers.forEach(clearInterval);
   timers = [];
   tasks = [];
-  cleanups.splice(0).forEach((f) => f());
   el.replaceChildren();
   onClip = () => {};
-  document.querySelector('.card').className = 'card w-' + type;
+  card.className = 'card w-' + type;
   const p = state.prefs;
-  W[type]({ ...(p.widgetOpts[type] || {}) }, p);
+  if (W[type]) W[type]({ ...(p.widgetOpts[type] || {}) }, p);
 }
 
 function onState(s) {
@@ -374,6 +474,29 @@ function onState(s) {
   const key = JSON.stringify([s.prefs.widgetOpts[type], type === 'worldclock' ? s.prefs.widgetOpts.clock : null]);
   if (key !== mountKey) { mountKey = key; mount(); }
 }
+
+// Drag by hand so the main process can snap to the grid and push other widgets out of the way.
+let press = null;
+card.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.target.closest('button, input, textarea, select, .list, .tile, .clip, .cb, .cal-head span')) return;
+  press = { x: e.screenX, y: e.screenY, dragging: false, id: e.pointerId };
+  card.setPointerCapture(e.pointerId);
+});
+card.addEventListener('pointermove', (e) => {
+  if (!press || press.dragging) return;
+  if (Math.hypot(e.screenX - press.x, e.screenY - press.y) < 5) return;
+  press.dragging = true;
+  card.classList.add('dragging');
+  window.api.dragStart();
+});
+const release = () => {
+  if (press?.dragging) { card.classList.remove('dragging'); window.api.dragEnd(); }
+  press = null;
+};
+card.addEventListener('pointerup', release);
+card.addEventListener('pointercancel', release);
+card.addEventListener('contextmenu', (e) => { e.preventDefault(); window.api.widgetMenu(); });
+window.api.onResized(() => { card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop'); });
 
 window.api.onVis((v) => {
   paused = !v;
