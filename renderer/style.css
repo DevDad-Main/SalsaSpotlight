@@ -27,8 +27,8 @@ html, body { background: transparent; overflow: hidden; font-family: "Segoe UI V
 #app { background: var(--tint); border-radius: var(--lr, 22px); overflow: hidden; }
 body.rounded #app { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--edge), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 body.acrylic #app { border-radius: 0; }
-#app.pop { animation: pop 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
-@keyframes pop { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+#app.pop { animation: pop 0.12s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 body.noanim *, body.noanim #app.pop { animation: none !important; transition: none !important; }
 
 .bar { height: 66px; display: flex; align-items: center; gap: 14px; padding: 0 24px; }

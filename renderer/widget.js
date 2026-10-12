@@ -9,6 +9,43 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const head = (t, extra = '') => `<div class="label"><i class="dot"></i>${t}${extra}</div>`;
 const gb = (b) => (b / 1024 ** 3).toFixed(b > 1e11 ? 0 : 1) + ' GB';
 const sparkSvg = '<svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><path id="sa" class="sa"/><path id="sl" class="sl"/></svg>';
+
+function lucide(name, cls = '', size = 18) {
+  const I = {
+    cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/>',
+    memory: '<path d="M6 19v-3M10 19v-3M14 19v-3M18 19v-3M4 11V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>',
+    gpu: '<rect width="20" height="12" x="2" y="6" rx="6"/><path d="M12 12h.01M17 12h.01M7 12h2M8 11v2"/>',
+    monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+    laptop: '<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/>',
+    user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    windows: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/>',
+    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    timer: '<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    cloudSun: '<path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41"/><path d="M15.5 17a4.5 4.5 0 0 0-3.5-7.38 6 6 0 0 0-7.39 7.38 4.5 4.5 0 0 0 0 9h10.89a4.5 4.5 0 0 0 0-9Z"/>',
+    cloudRain: '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M16 14v6M8 14v6M12 16v6"/>',
+    cloudSnow: '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01"/>',
+    cloudLightning: '<path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973M13 12l-3 5h4l-3 5"/>',
+    cloudFog: '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M16 17H7M17 21H9"/>',
+    battery: '<rect width="16" height="10" x="2" y="7" rx="2"/><line x1="22" x2="22" y1="11" y2="13"/>',
+    wind: '<path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/>',
+    droplet: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+    sunrise: '<path d="M12 2v6M4.93 10.93l1.41 1.41M20 17h2M2 17h2M17.66 12.34l1.41-1.41M16 17a4 4 0 0 0-8 0"/>',
+    sunset: '<path d="M12 10V4M4.93 10.93l1.41 1.41M20 17h2M2 17h2M17.66 12.34l1.41-1.41M16 17a4 4 0 0 0-8 0"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>',
+    sparkles: '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>',
+    quote: '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1zM15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/>',
+    calendar: '<path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    hardDrive: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/>',
+  };
+  const body = I[name] || I.sparkles;
+  return `<svg class="lucide lucide-${name} ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+}
+
 function drawSpark(hist, max) {
   const pts = hist.map((v, i) => `${(i * 200) / (hist.length - 1)},${38 - (v / max) * 36}`).join('L');
   $('#sl').setAttribute('d', 'M' + pts);
@@ -28,16 +65,16 @@ function setGauge(id, pct) {
 }
 
 const WX = (code, day = true) => {
-  if (code === 0) return [day ? '☀️' : '🌙', 'Clear sky'];
-  if (code <= 2) return [day ? '🌤️' : '☁️', 'Partly cloudy'];
-  if (code === 3) return ['☁️', 'Overcast'];
-  if (code <= 48) return ['🌫️', 'Fog'];
-  if (code <= 57) return ['🌦️', 'Drizzle'];
-  if (code <= 67) return ['🌧️', 'Rain'];
-  if (code <= 77) return ['❄️', 'Snow'];
-  if (code <= 82) return ['🌧️', 'Showers'];
-  if (code <= 86) return ['🌨️', 'Snow showers'];
-  return ['⛈️', 'Thunderstorm'];
+  if (code === 0) return [day ? lucide('sun', '', 48) : lucide('moon', '', 48), 'Clear sky'];
+  if (code <= 2) return [day ? lucide('cloudSun', '', 48) : lucide('cloud', '', 48), 'Partly cloudy'];
+  if (code === 3) return [lucide('cloud', '', 48), 'Overcast'];
+  if (code <= 48) return [lucide('cloudFog', '', 48), 'Fog'];
+  if (code <= 57) return [lucide('cloudRain', '', 48), 'Drizzle'];
+  if (code <= 67) return [lucide('cloudRain', '', 48), 'Rain'];
+  if (code <= 77) return [lucide('cloudSnow', '', 48), 'Snow'];
+  if (code <= 82) return [lucide('cloudRain', '', 48), 'Showers'];
+  if (code <= 86) return [lucide('cloudSnow', '', 48), 'Snow showers'];
+  return [lucide('cloudLightning', '', 48), 'Thunderstorm'];
 };
 
 const QUOTES = [
@@ -95,12 +132,13 @@ const W = {
           const hour = Number(f({ hour: 'numeric', hour12: false }).format(now)) % 24;
           const day = new Intl.DateTimeFormat('en-CA', { timeZone: z }).format(now);
           const rel = day === local ? 'Today' : day > local ? 'Tomorrow' : 'Yesterday';
-          row.innerHTML = `<span class="ri">${hour >= 6 && hour < 19 ? '☀️' : '🌙'}</span><div><b class="c"></b><small class="r"></small></div><div class="rt grad"></div>`;
+          const ri = hour >= 6 && hour < 19 ? lucide('sun', 'ri-svg', 16) : lucide('moon', 'ri-svg', 16);
+          row.innerHTML = `<span class="ri">${ri}</span><div><b class="c"></b><small class="r"></small></div><div class="rt grad"></div>`;
           $('.c', row).textContent = z.split('/').pop().replace(/_/g, ' ');
           $('.r', row).textContent = rel;
           $('.rt', row).textContent = f({ hour: prefs.widgetOpts.clock.h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !prefs.widgetOpts.clock.h24 }).format(now);
         } catch {
-          row.innerHTML = '<span class="ri">?</span><div><b class="c"></b><small>Unknown time zone</small></div>';
+          row.innerHTML = `<span class="ri">${lucide('globe', 'ri-svg', 16)}</span><div><b class="c"></b><small>Unknown time zone</small></div>`;
           $('.c', row).textContent = z;
         }
         rows.append(row);
@@ -121,16 +159,16 @@ const W = {
       card.dataset.sky = c >= 95 ? 'storm' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c === 3 || (c >= 45 && c <= 48) ? 'cloud' : d.isDay ? 'day' : 'night';
       const hours = d.hours.map((h) => `<div class="hour">${esc(h.h.slice(0, 2))}<span>${WX(h.code, true)[0]}</span><b>${Math.round(h.t)}°</b></div>`).join('');
       box.innerHTML = `<div class="wcity">${esc(d.city)}, ${esc(d.country || '')} <span class="muted">- ${esc(text)}</span></div><div class="wmain"><div class="wicon">${icon}</div><div class="wtemp grad">${Math.round(d.temp)}${esc(d.unit)}</div></div>`
-        + `<div class="wmeta"><span>Feels ${Math.round(d.feels)}°</span><span>H ${Math.round(d.hi)}° L ${Math.round(d.lo)}°</span><span>💧 ${d.humidity}%</span><span>💨 ${Math.round(d.wind)} ${esc(d.windUnit)}</span></div>`
-        + `<div class="wmeta"><span>🌅 ${esc(d.sunrise)}</span><span>🌇 ${esc(d.sunset)}</span></div><div class="hours">${hours}</div>`;
+        + `<div class="wmeta"><span>Feels ${Math.round(d.feels)}°</span><span>H ${Math.round(d.hi)}° L ${Math.round(d.lo)}°</span><span>${lucide('droplet', '', 13)} ${d.humidity}%</span><span>${lucide('wind', '', 13)} ${Math.round(d.wind)} ${esc(d.windUnit)}</span></div>`
+        + `<div class="wmeta"><span>${lucide('sunrise', '', 13)} ${esc(d.sunrise)}</span><span>${lucide('sunset', '', 13)} ${esc(d.sunset)}</span></div><div class="hours">${hours}</div>`;
     }, 15 * 60 * 1000);
   },
 
   system(o) {
-    const row = (id, icon, label, hidden) => `<div class="row" id="r${id}"${hidden ? ' hidden' : ''}><span class="ri">${icon}</span><div><small>${label}</small><b id="i${id}">...</b></div></div>`;
+    const row = (id, iconSvg, label, hidden) => `<div class="row" id="r${id}"${hidden ? ' hidden' : ''}><span class="ri">${iconSvg}</span><div><small>${label}</small><b id="i${id}">...</b></div></div>`;
     el.innerHTML = `${head('System')}<div class="gauges">${gauge('c', 'a', 'CPU')}${gauge('m', 'g', 'RAM')}${o.gpu ? gauge('u', 'p', 'GPU', 'id="gw" hidden') : ''}</div>`
       + (o.graph ? sparkSvg : '')
-      + (o.info ? `<div class="rows">${row(1, '🧠', 'Processor')}${row(2, '💾', 'Memory')}${o.gpu ? row(3, '🎮', 'Graphics', true) : ''}</div>` : '')
+      + (o.info ? `<div class="rows">${row(1, lucide('cpu', 'ri-svg', 16), 'Processor')}${row(2, lucide('memory', 'ri-svg', 16), 'Memory')}${o.gpu ? row(3, lucide('gpu', 'ri-svg', 16), 'Graphics', true) : ''}</div>` : '')
       + '<div class="foot" id="f"></div>';
     const tk = mountSeq;
     if (o.info) {
@@ -155,8 +193,8 @@ const W = {
         }
       }
       let batt = '';
-      if (o.battery) { try { const b = await navigator.getBattery(); if (b.level < 1 || !b.charging) batt = ` | 🔋 ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`; } catch { /* no battery */ } }
-      $('#f').textContent = `Up ${Math.floor(s.uptime / 3600)}h ${Math.floor(s.uptime / 60) % 60}m${batt}`;
+      if (o.battery) { try { const b = await navigator.getBattery(); if (b.level < 1 || !b.charging) batt = ` | ${lucide('battery', 'ri-svg', 13)} ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`; } catch { /* no battery */ } }
+      $('#f').innerHTML = `${lucide('clock', 'ri-svg', 12)} Up ${Math.floor(s.uptime / 3600)}h ${Math.floor(s.uptime / 60) % 60}m${batt}`;
     }, 1500);
   },
 
@@ -172,19 +210,24 @@ const W = {
       const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
       const gpuText = s.gpu === undefined ? 'Detecting...' : (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '');
       const rows = [
-        ['rig', 'GeForce NOW rig', '☁️', s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
-        ['host', 'Device', '🖥️', s.host], ['user', 'User', '👤', s.user], ['os', 'Windows', '🪟', s.os],
-        ['cpu', 'Processor', '🧠', `${s.cpu} (${s.cores})`], ['gpu', 'Graphics', '🎮', gpuText],
-        ['ram', 'Memory', '💾', s.ramLabel ? `${s.ramLabel} allocated` : gb(s.ram) + ' installed'], ['screen', 'Display', '🖵', s.screens.join(' + ')],
-        ['ip', 'Network', '🌐', s.ip || 'Offline'], ['uptime', 'Uptime', '⏱️', up],
+        ['rig', 'GeForce NOW rig', lucide('cloud', 'ri-svg', 16), s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
+        ['host', 'Device', lucide('laptop', 'ri-svg', 16), s.host],
+        ['user', 'User', lucide('user', 'ri-svg', 16), s.user],
+        ['os', 'Windows', lucide('windows', 'ri-svg', 16), s.os],
+        ['cpu', 'Processor', lucide('cpu', 'ri-svg', 16), `${s.cpu} (${s.cores})`],
+        ['gpu', 'Graphics', lucide('gpu', 'ri-svg', 16), gpuText],
+        ['ram', 'Memory', lucide('memory', 'ri-svg', 16), s.ramLabel ? `${s.ramLabel} allocated` : gb(s.ram) + ' installed'],
+        ['screen', 'Display', lucide('monitor', 'ri-svg', 16), s.screens.join(' + ')],
+        ['ip', 'Network', lucide('globe', 'ri-svg', 16), s.ip || 'Offline'],
+        ['uptime', 'Uptime', lucide('clock', 'ri-svg', 16), up],
       ].filter((r) => o[r[0]] && r[3]);
       const box = $('.rows');
       box.replaceChildren();
-      rows.forEach(([, label, icon, value], i) => {
+      rows.forEach(([, label, iconSvg, value], i) => {
         const r = document.createElement('div');
         r.className = 'row';
-        r.style.animationDelay = i * 40 + 'ms';
-        r.innerHTML = `<span class="ri">${icon}</span><div><small>${label}</small><b></b></div>`;
+        r.style.animationDelay = i * 35 + 'ms';
+        r.innerHTML = `<span class="ri">${iconSvg}</span><div><small>${label}</small><b></b></div>`;
         $('b', r).textContent = value;
         r.title = value;
         box.append(r);
@@ -205,7 +248,7 @@ const W = {
         const used = ((d.total - d.free) / d.total) * 100;
         const n = document.createElement('div');
         n.className = 'disk';
-        n.innerHTML = `<div class="top"><b>${esc(d.name)}</b><span class="muted">${gb(d.free)} free of ${gb(d.total)}</span></div><div class="track"><div class="fill${used > 88 ? ' warn' : ''}"></div></div>`;
+        n.innerHTML = `<div class="top"><b style="display:flex;align-items:center;gap:6px">${lucide('hardDrive', '', 14)} ${esc(d.name)}</b><span class="muted">${gb(d.free)} free of ${gb(d.total)}</span></div><div class="track"><div class="fill${used > 88 ? ' warn' : ''}"></div></div>`;
         box.append(n);
         requestAnimationFrame(() => requestAnimationFrame(() => { $('.fill', n).style.width = used + '%'; }));
       });

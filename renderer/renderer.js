@@ -120,6 +120,11 @@ window.api.onShown(() => {
   app.classList.add('pop');
   input.focus();
   input.select();
-  update();
+  if (input.value !== '') {
+    input.value = '';
+    update();
+  } else if (!results.length) {
+    update();
+  }
 });
 update();

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   onGoto: (cb) => ipcRenderer.on('goto', (_e, p) => cb(p)),
   checkUpdates: () => ipcRenderer.send('check-updates'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  getStartupStatus: () => ipcRenderer.invoke('startup:get'),
+  setStartupStatus: (enabled) => ipcRenderer.invoke('startup:set', enabled),
   reset: () => ipcRenderer.send('reset'),
   // widgets
   onVis: (cb) => ipcRenderer.on('vis', (_e, v) => cb(v)),

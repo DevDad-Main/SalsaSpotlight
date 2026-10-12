@@ -5,6 +5,19 @@ const os = require('os');
 const { Worker } = require('worker_threads');
 const { spawn, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const startupBatch = require('./startup-batch');
+
+const STARTUP_STABLE_RUN_MS = 10 * 60 * 1000;
+let startupStableTimer;
+function scheduleStartupStableClear() {
+  clearTimeout(startupStableTimer);
+  startupStableTimer = null;
+  const counterPath = startupBatch.defaultCounterPath();
+  if (!startupBatch.readFailedStarts(counterPath)) return;
+  startupStableTimer = setTimeout(() => {
+    startupBatch.clearFailedStarts(counterPath);
+  }, STARTUP_STABLE_RUN_MS);
+}
 
 let updateReady = null;
 const updateInfo = { status: 'idle', latest: null, percent: 0, error: '', checkedAt: 0 };
@@ -25,24 +38,25 @@ process.on('uncaughtException', (e) => {
 process.on('unhandledRejection', logError);
 
 const WIDTH = 700;
+// Standard macOS-style modular widths (330px standard column width)
 const WIDGETS = {
-  clock: { title: 'Clock', size: [290, 180] },
-  worldclock: { title: 'World Clock', size: [300, 230] },
-  weather: { title: 'Weather', size: [330, 280] },
-  system: { title: 'System Monitor', size: [340, 400] },
-  specs: { title: 'PC Specs', size: [360, 480] },
-  disks: { title: 'Storage', size: [310, 240] },
-  calendar: { title: 'Calendar', size: [300, 310] },
-  progress: { title: 'Day & Year Progress', size: [300, 250] },
-  timer: { title: 'Timer', size: [290, 310] },
-  todo: { title: 'To-do', size: [310, 350] },
-  notes: { title: 'Notes', size: [300, 290] },
-  dock: { title: 'Frequent Apps', size: [340, 180] },
-  clipboard: { title: 'Clipboard', size: [340, 350] },
-  gpu: { title: 'GPU', size: [320, 260] },
-  network: { title: 'Network', size: [320, 240] },
-  countdown: { title: 'Countdown', size: [290, 190] },
-  quote: { title: 'Daily Quote', size: [330, 180] },
+  clock: { title: 'Clock', size: [330, 160] },
+  worldclock: { title: 'World Clock', size: [330, 240] },
+  weather: { title: 'Weather', size: [330, 240] },
+  system: { title: 'System Monitor', size: [330, 340] },
+  specs: { title: 'PC Specs', size: [330, 480] },
+  disks: { title: 'Storage', size: [330, 240] },
+  calendar: { title: 'Calendar', size: [330, 310] },
+  progress: { title: 'Day & Year Progress', size: [330, 240] },
+  timer: { title: 'Timer', size: [330, 300] },
+  todo: { title: 'To-do', size: [330, 340] },
+  notes: { title: 'Notes', size: [330, 270] },
+  dock: { title: 'Frequent Apps', size: [330, 180] },
+  clipboard: { title: 'Clipboard', size: [330, 340] },
+  gpu: { title: 'GPU', size: [330, 260] },
+  network: { title: 'Network', size: [330, 240] },
+  countdown: { title: 'Countdown', size: [330, 180] },
+  quote: { title: 'Daily Quote', size: [330, 160] },
 };
 const SIZES = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
 const SIZE_LABELS = { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
@@ -80,7 +94,7 @@ const DEFAULTS = {
   widgetOpts: {
     clock: { h24: false, seconds: true, analog: false },
     worldclock: { zones: 'America/New_York,Europe/London,Asia/Tokyo' },
-    weather: { city: 'London', units: 'c' },
+    weather: { city: 'auto', units: 'c' },
     system: { graph: true, battery: true, info: true, gpu: true },
     specs: { host: true, user: true, os: true, cpu: true, gpu: true, ram: true, screen: true, ip: true, uptime: true, rig: true },
     calendar: { mondayFirst: true },
@@ -315,6 +329,8 @@ function createWindow() {
 function toggle() {
   if (win.isVisible()) return win.hide();
   const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const h = Math.max(70 + PAD() * 2, launcherHeight);
+  win.setContentSize(winWidth(), h);
   win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * (prefs.launcherTop / 100) - PAD()));
   win.show();
   win.focus();
@@ -649,13 +665,35 @@ const cpuTimes = () => {
 
 const weatherCache = {};
 async function getWeather(city, units) {
-  const key = `${city}|${units}`;
+  const normCity = String(city || '').trim();
+  const isAuto = !normCity || /^(auto|current|local|my location)$/i.test(normCity);
+  const key = `${normCity || 'auto'}|${units}`;
   const hit = weatherCache[key];
   if (hit && Date.now() - hit.t < 15 * 60 * 1000) return hit.d;
   try {
-    const g = await (await net.fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`)).json();
-    const loc = g.results?.[0];
-    if (!loc) return { error: 'City not found' };
+    let loc = null;
+    if (isAuto) {
+      try {
+        const geo = await (await net.fetch('http://ip-api.com/json/')).json();
+        if (geo && geo.lat && geo.lon) {
+          loc = { name: geo.city || 'Local Area', country_code: geo.countryCode || '', latitude: geo.lat, longitude: geo.lon };
+        }
+      } catch { /* try fallback */ }
+      if (!loc) {
+        try {
+          const geo = await (await net.fetch('https://freeipapi.com/api/json')).json();
+          if (geo && geo.latitude && geo.longitude) {
+            loc = { name: geo.cityName || 'Local Area', country_code: geo.countryCode || '', latitude: geo.latitude, longitude: geo.longitude };
+          }
+        } catch { /* fallback to search */ }
+      }
+    }
+    if (!loc) {
+      const searchTarget = isAuto ? 'London' : normCity;
+      const g = await (await net.fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchTarget)}&count=1`)).json();
+      loc = g.results?.[0];
+    }
+    if (!loc) return { error: `Could not find city "${normCity}"` };
     const f = units === 'f';
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}`
       + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day'
@@ -737,11 +775,17 @@ ipcMain.handle('run', async (_e, { item, q, reveal }) => {
   else if (item.kind === 'web') shell.openExternal((ENGINES[prefs.search.engine] || ENGINES.google) + encodeURIComponent(q));
 });
 
-ipcMain.on('resize', (_e, h) => { if (win) win.setContentSize(winWidth(), Math.max(70 + PAD() * 2, Math.min(h, 860))); });
+let launcherHeight = 70;
+ipcMain.on('resize', (_e, h) => {
+  launcherHeight = Math.max(70 + PAD() * 2, Math.min(h, 860));
+  if (win && win.isVisible()) win.setContentSize(winWidth(), launcherHeight);
+});
 ipcMain.on('hide', () => win.hide());
 ipcMain.on('widget-close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
 
 ipcMain.handle('state', () => state());
+ipcMain.handle('startup:get', () => ({ ...startupBatch.getStartupStatus(), packaged: app.isPackaged }));
+ipcMain.handle('startup:set', (_e, enabled) => startupBatch.setStartupEnabled(enabled === true, process.execPath));
 ipcMain.on('set', (_e, key, val) => setPref(String(key), val));
 ipcMain.on('toggle-widget', (_e, t) => toggleWidget(String(t)));
 ipcMain.on('open-settings', openSettings);
@@ -916,6 +960,7 @@ app.whenReady().then(() => {
   createTray();
   screen.on('display-metrics-changed', relayoutAll);
   screen.on('display-removed', relayoutAll);
+  scheduleStartupStableClear();
   const hotkeyOk = registerKeys();
   if (firstRun || !hotkeyOk) {
     new Notification({
@@ -923,7 +968,6 @@ app.whenReady().then(() => {
       body: hotkeyOk ? `Press ${prefs.hotkey.replace('+', ' + ')} to search. Find it in the system tray too.`
         : `${prefs.hotkey} is taken by another app, so use Ctrl + Space instead. Change it in Settings.`,
     }).show();
-    if (firstRun) setTimeout(toggle, 800);
   }
   startIndex();
   setupUpdates();

@@ -13,6 +13,7 @@ const PAGES = {
     { title: 'Launcher', items: [
       { key: 'hotkey', label: 'Open Spotlight with', desc: 'Falls back to Ctrl + Space if the shortcut is taken', type: 'select', options: KEYS },
       { key: 'launchAtLogin', label: 'Launch at login', desc: 'Starts with Windows for your account only', type: 'toggle' },
+      { type: 'salsanow', label: 'SalsaNOW automatic startup', desc: 'Adds SalsaSpotlight to I:\\Apps\\SalsaNOW\\StartupBatch.bat so it launches with your GFN session' },
     ] },
     { title: 'Privacy', items: [
       { key: 'clipboard', label: 'Clipboard history', desc: 'Remembers copied text in memory only. Type "clip" in Spotlight. Cleared on quit.', type: 'toggle' },
@@ -56,9 +57,11 @@ const WIDGET_OPTS = {
     { key: 'widgetOpts.clock.seconds', label: 'Show seconds', type: 'toggle' },
     { key: 'widgetOpts.clock.analog', label: 'Analog face', type: 'toggle' },
   ],
-  worldclock: [{ key: 'widgetOpts.worldclock.zones', label: 'Time zones', desc: 'Comma-separated, up to 5. Example: America/New_York,Asia/Tokyo', type: 'text' }],
+  worldclock: [
+    { key: 'widgetOpts.worldclock.zones', label: 'Time zones', desc: 'Comma-separated IANA timezone names (e.g. America/New_York, Europe/London, Asia/Tokyo, Australia/Sydney)', type: 'text' },
+  ],
   weather: [
-    { key: 'widgetOpts.weather.city', label: 'City', type: 'text' },
+    { key: 'widgetOpts.weather.city', label: 'City location', desc: 'Type "auto" to use your detected location, or enter any city name (e.g. London, New York, Tokyo)', type: 'text' },
     { key: 'widgetOpts.weather.units', label: 'Units', type: 'select', options: [['c', 'Celsius, km/h'], ['f', 'Fahrenheit, mph']] },
   ],
   system: [
@@ -155,6 +158,35 @@ function control(item) {
       b.textContent = item.btn || 'Reset';
       b.onclick = item.action;
       wrap.append(b);
+      break;
+    }
+    case 'salsanow': {
+      wrap.innerHTML = '<label class="sw"><input type="checkbox" id="sn-chk"><i></i></label><span class="val" id="sn-stat" style="min-width:60px"></span>';
+      const input = wrap.querySelector('#sn-chk');
+      const stat = wrap.querySelector('#sn-stat');
+      const refreshStatus = () => {
+        window.api.getStartupStatus().then((st) => {
+          if (!st.available) {
+            input.disabled = true;
+            stat.textContent = 'Not in SalsaNOW';
+            stat.style.color = 'var(--muted)';
+          } else if (st.paused) {
+            input.checked = false;
+            stat.textContent = 'Paused';
+            stat.style.color = '#ff9f0a';
+          } else {
+            input.checked = st.enabled;
+            input.disabled = false;
+            stat.textContent = st.enabled ? 'Active' : 'Off';
+            stat.style.color = st.enabled ? '#30d158' : 'var(--muted)';
+          }
+        }).catch(() => {});
+      };
+      input.onchange = () => {
+        window.api.setStartupStatus(input.checked).then(() => refreshStatus());
+      };
+      reg(refreshStatus);
+      refreshStatus();
       break;
     }
   }
