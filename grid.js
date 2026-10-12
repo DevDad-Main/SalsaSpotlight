@@ -68,19 +68,41 @@ module.exports = ({ prefs, wins, persist }) => {
     const s = getScale();
     const colW = Math.round(BASE_COL_WIDTH * s);
     const gap = Math.round(GAP * s);
+    const anchor = prefs().arrangeAnchor || 'top-right';
+
+    // Sort widgets so larger, higher-priority widgets take primary grid spots
+    const activeWins = Object.values(wins()).filter((w) => !w.isDestroyed() && w.isVisible());
+    activeWins.sort((a, b) => (b.getBounds().width * b.getBounds().height) - (a.getBounds().width * a.getBounds().height));
 
     let curCol = 0;
     let curY = wa.y + MARGIN_TOP;
 
-    const activeWins = Object.values(wins()).filter((w) => !w.isDestroyed() && w.isVisible());
     for (const w of activeWins) {
       const b = w.getBounds();
-      if (curY + b.height > wa.y + wa.height - 20 && curY > wa.y + MARGIN_TOP) {
+      if (curY + b.height > wa.y + wa.height - 24 && curY > wa.y + MARGIN_TOP) {
         curCol++;
         curY = wa.y + MARGIN_TOP;
       }
-      const nextX = wa.x + wa.width - (curCol + 1) * colW - curCol * gap - MARGIN_RIGHT;
-      animateTo(w, { x: nextX, y: curY, width: b.width, height: b.height }, 300);
+
+      let targetX = wa.x + wa.width - (curCol + 1) * colW - curCol * gap - MARGIN_RIGHT;
+      let targetY = curY;
+
+      if (anchor === 'top-left') {
+        targetX = wa.x + 24 + curCol * (colW + gap);
+        targetY = curY;
+      } else if (anchor === 'bottom-left') {
+        targetX = wa.x + 24 + curCol * (colW + gap);
+        targetY = wa.y + wa.height - (curY - wa.y) - b.height;
+      } else if (anchor === 'bottom-right') {
+        targetX = wa.x + wa.width - (curCol + 1) * colW - curCol * gap - MARGIN_RIGHT;
+        targetY = wa.y + wa.height - (curY - wa.y) - b.height;
+      } else if (anchor === 'center') {
+        const totalW = (curCol + 1) * colW + curCol * gap;
+        targetX = Math.round(wa.x + (wa.width - totalW) / 2 + curCol * (colW + gap));
+        targetY = curY;
+      }
+
+      animateTo(w, clampToScreen({ x: targetX, y: targetY, width: b.width, height: b.height }, d), 320);
       curY += b.height + gap;
     }
   }
@@ -89,7 +111,7 @@ module.exports = ({ prefs, wins, persist }) => {
     arrange();
   }
 
-  // Snap a widget to the grid and push any widgets it overlaps cleanly
+  // Snap a widget to the grid and swap or push overlapping widgets cleanly
   function settle(w) {
     const t = typeOf(w);
     if (!t || w.isDestroyed()) return;
@@ -99,16 +121,19 @@ module.exports = ({ prefs, wins, persist }) => {
 
     if (!prefs().gridCollisions) { animateTo(w, r); return; }
 
-    const s = getScale();
-    const gap = Math.round(GAP * s);
     const otherWins = Object.entries(wins()).filter(([k, x]) => k !== t && !x.isDestroyed() && x.isVisible());
     animateTo(w, r);
 
+    // Find any direct collisions
     for (const [, ow] of otherWins) {
       const ob = ow.getBounds();
-      if (hit(r, ob, 4)) {
-        const shiftedY = r.y + r.height + gap;
-        animateTo(ow, clampToScreen({ ...ob, x: ob.x, y: shiftedY }, d), 240);
+      if (hit(r, ob, 6)) {
+        // If dropped right over an existing widget, cleanly swap or push to next free slot
+        const activeOccupied = otherWins.map(([, x]) => x.getBounds()).concat([r]);
+        const freeTarget = findFree(ob, d, activeOccupied);
+        if (freeTarget) {
+          animateTo(ow, freeTarget, 240);
+        }
       }
     }
   }
@@ -158,26 +183,36 @@ module.exports = ({ prefs, wins, persist }) => {
     });
     overlayWin.setIgnoreMouseEvents(true);
 
-    let slotsHtml = '';
-    const cols = Math.min(4, Math.floor((wa.width - MARGIN_RIGHT * 2) / (colW + gap)));
-    const rows = Math.min(6, Math.floor((wa.height - MARGIN_TOP * 2) / (rowH + gap)));
+    // Check screen bounds
+    const cols = Math.min(10, Math.floor((wa.width - 48) / (colW + gap)));
+    const rows = Math.min(8, Math.floor((wa.height - 48) / (rowH + gap)));
+
+    const originX = wa.x + 24;
+    const originY = wa.y + 24;
 
     for (let c = 0; c < cols; c++) {
-      const x = wa.width - (c + 1) * colW - c * gap - MARGIN_RIGHT;
+      const x = originX + c * (colW + gap);
       for (let r = 0; r < rows; r++) {
-        const y = MARGIN_TOP + r * (rowH + gap);
+        const y = originY + r * (rowH + gap);
         slotsHtml += `<div class="slot" style="left:${x}px;top:${y}px;width:${colW}px;height:${rowH}px;border-radius:${radius}px"></div>`;
       }
     }
 
     const html = `<!DOCTYPE html><html><head><style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
+      body {
+        width: 100vw; height: 100vh; overflow: hidden; background: transparent;
+        background-image:
+          linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: ${colW + gap}px ${rowH + gap}px;
+        background-position: ${originX}px ${originY}px;
+      }
       .slot {
         position: absolute;
-        border: 2px dashed rgba(255, 255, 255, 0.16);
-        background: rgba(255, 255, 255, 0.02);
-        box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
+        border: 1.5px dashed rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.015);
+        box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.02);
         animation: fadeIn 0.15s ease-out;
       }
       @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }

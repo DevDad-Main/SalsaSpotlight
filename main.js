@@ -42,7 +42,7 @@ const WIDTH = 700;
 const WIDGETS = {
   clock: { title: 'Clock', size: [330, 160] },
   worldclock: { title: 'World Clock', size: [330, 240] },
-  weather: { title: 'Weather', size: [330, 240] },
+  weather: { title: 'Weather', size: [330, 270] },
   system: { title: 'System Monitor', size: [330, 340] },
   specs: { title: 'PC Specs', size: [330, 480] },
   disks: { title: 'Storage', size: [330, 240] },
@@ -84,6 +84,8 @@ const DEFAULTS = {
   launcherRadius: 22,
   launcherWidth: 700,
   launcherTop: 20,
+  launcherShadow: true,
+  arrangeAnchor: 'top-right',
   tint: 0.45,
   animations: true,
   clipboard: true,
@@ -866,6 +868,22 @@ ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(cli
 ipcMain.on('clip-clear', () => {
   clipHistory = [];
   for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send('clip', clipHistory);
+});
+
+ipcMain.handle('logs:read', () => {
+  const file = path.join(app.getPath('userData'), 'error.log');
+  try {
+    return { path: file, content: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : 'No errors logged. All systems running normally.' };
+  } catch (e) {
+    return { path: file, content: `Error reading log file: ${e.message}` };
+  }
+});
+ipcMain.on('logs:clear', () => {
+  const file = path.join(app.getPath('userData'), 'error.log');
+  try { fs.writeFileSync(file, ''); } catch { /* ignore */ }
+});
+ipcMain.on('logs:open-folder', () => {
+  shell.showItemInFolder(path.join(app.getPath('userData'), 'error.log'));
 });
 
 // ---------- auto-update (GitHub releases) ----------

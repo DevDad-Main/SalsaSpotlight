@@ -24,17 +24,34 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: transparent; overflow: hidden; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); user-select: none; }
 #wrap { padding: var(--pad); }
-#app { background: var(--tint); border-radius: var(--lr, 22px); overflow: hidden; }
-body.rounded #app { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--edge), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+#app { background: var(--tint); border-radius: var(--lr, 22px); overflow: hidden; backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%); }
+body.rounded #app {
+  border: 1px solid var(--edge);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+body.noshadow #app {
+  box-shadow: none !important;
+}
 body.acrylic #app { border-radius: 0; }
 #app.pop { animation: pop 0.12s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 body.noanim *, body.noanim #app.pop { animation: none !important; transition: none !important; }
 
-.bar { height: 66px; display: flex; align-items: center; gap: 14px; padding: 0 24px; }
-.mag { width: 24px; height: 24px; color: var(--muted); flex: none; }
-#q { flex: 1; background: none; border: 0; outline: 0; color: var(--text); font: 300 25px "Segoe UI Variable Display", "Segoe UI", sans-serif; caret-color: var(--accent); }
+.bar { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 20px; }
+.mag { width: 22px; height: 22px; color: var(--muted); flex: none; }
+#q { flex: 1; background: none; border: 0; outline: 0; color: var(--text); font: 300 24px "Segoe UI Variable Display", "Segoe UI", sans-serif; caret-color: var(--accent); }
 #q::placeholder { color: var(--muted); }
+
+/* Quick shortcut action chips (macOS-style) */
+.quick-chips { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.chip-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--tile); color: var(--text); display: grid; place-items: center;
+  cursor: pointer; transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.chip-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.25); transform: scale(1.05); }
+.chip-btn:active { transform: scale(0.95); }
+.chip-btn svg { width: 16px; height: 16px; }
 
 #list { list-style: none; border-top: 1px solid var(--line); padding: 6px 10px 10px; max-height: 640px; overflow: hidden; }
 #list:empty { display: none; }

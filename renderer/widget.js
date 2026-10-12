@@ -64,17 +64,31 @@ function setGauge(id, pct) {
   $('#' + id + 'v').textContent = Math.round(pct) + '%';
 }
 
+const WX_ICON_NAME = (code, day = true) => {
+  if (code === 0) return day ? 'sun' : 'moon';
+  if (code <= 2) return day ? 'cloudSun' : 'cloud';
+  if (code === 3) return 'cloud';
+  if (code <= 48) return 'cloudFog';
+  if (code <= 57) return 'cloudRain';
+  if (code <= 67) return 'cloudRain';
+  if (code <= 77) return 'cloudSnow';
+  if (code <= 82) return 'cloudRain';
+  if (code <= 86) return 'cloudSnow';
+  return 'cloudLightning';
+};
+
 const WX = (code, day = true) => {
-  if (code === 0) return [day ? lucide('sun', '', 48) : lucide('moon', '', 48), 'Clear sky'];
-  if (code <= 2) return [day ? lucide('cloudSun', '', 48) : lucide('cloud', '', 48), 'Partly cloudy'];
-  if (code === 3) return [lucide('cloud', '', 48), 'Overcast'];
-  if (code <= 48) return [lucide('cloudFog', '', 48), 'Fog'];
-  if (code <= 57) return [lucide('cloudRain', '', 48), 'Drizzle'];
-  if (code <= 67) return [lucide('cloudRain', '', 48), 'Rain'];
-  if (code <= 77) return [lucide('cloudSnow', '', 48), 'Snow'];
-  if (code <= 82) return [lucide('cloudRain', '', 48), 'Showers'];
-  if (code <= 86) return [lucide('cloudSnow', '', 48), 'Snow showers'];
-  return [lucide('cloudLightning', '', 48), 'Thunderstorm'];
+  const icon = lucide(WX_ICON_NAME(code, day), '', 44);
+  if (code === 0) return [icon, 'Clear sky'];
+  if (code <= 2) return [icon, 'Partly cloudy'];
+  if (code === 3) return [icon, 'Overcast'];
+  if (code <= 48) return [icon, 'Fog'];
+  if (code <= 57) return [icon, 'Drizzle'];
+  if (code <= 67) return [icon, 'Rain'];
+  if (code <= 77) return [icon, 'Snow'];
+  if (code <= 82) return [icon, 'Showers'];
+  if (code <= 86) return [icon, 'Snow showers'];
+  return [icon, 'Thunderstorm'];
 };
 
 const QUOTES = [
@@ -116,34 +130,67 @@ const W = {
   },
 
   worldclock(o, prefs) {
-    const zones = o.zones.split(',').map((z) => z.trim()).filter(Boolean).slice(0, 5);
-    el.innerHTML = `${head('World clock')}<div class="rows"></div>`;
-    const rows = $('.rows');
+    const rawZones = String(o.zones || 'America/New_York,Europe/London,Asia/Tokyo');
+    const zones = rawZones.split(',').map((z) => z.trim()).filter(Boolean).slice(0, 4);
+    el.innerHTML = `${head('World Clock')}<div class="analog-clocks" id="ac"></div>`;
+    const box = $('#ac');
     every(() => {
       const now = new Date();
-      const local = now.toLocaleDateString('en-CA');
-      rows.replaceChildren();
+      box.replaceChildren();
       zones.forEach((z) => {
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.style.animation = 'none';
+        const item = document.createElement('div');
+        item.className = 'ac-item';
         try {
-          const f = (opt) => new Intl.DateTimeFormat([], { timeZone: z, ...opt });
-          const hour = Number(f({ hour: 'numeric', hour12: false }).format(now)) % 24;
-          const day = new Intl.DateTimeFormat('en-CA', { timeZone: z }).format(now);
-          const rel = day === local ? 'Today' : day > local ? 'Tomorrow' : 'Yesterday';
-          const ri = hour >= 6 && hour < 19 ? lucide('sun', 'ri-svg', 16) : lucide('moon', 'ri-svg', 16);
-          row.innerHTML = `<span class="ri">${ri}</span><div><b class="c"></b><small class="r"></small></div><div class="rt grad"></div>`;
-          $('.c', row).textContent = z.split('/').pop().replace(/_/g, ' ');
-          $('.r', row).textContent = rel;
-          $('.rt', row).textContent = f({ hour: prefs.widgetOpts.clock.h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !prefs.widgetOpts.clock.h24 }).format(now);
+          const fTime = (opt) => new Intl.DateTimeFormat([], { timeZone: z, ...opt });
+          const parts = fTime({ hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false }).formatToParts(now);
+          const getP = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
+          const H = getP('hour') % 12;
+          const M = getP('minute');
+          const S = getP('second');
+
+          const hDeg = (H + M / 60) * 30;
+          const mDeg = (M + S / 60) * 6;
+          const sDeg = S * 6;
+
+          const cityName = z.split('/').pop().replace(/_/g, ' ');
+          const localOffset = -now.getTimezoneOffset();
+          const targetStr = fTime({ timeZoneName: 'shortOffset' }).format(now);
+          const match = targetStr.match(/GMT([+-]\d+)?/i);
+          const targetOffsetHours = match && match[1] ? parseInt(match[1], 10) : 0;
+          const diffHours = targetOffsetHours - Math.round(localOffset / 60);
+          const diffStr = diffHours === 0 ? 'Same time' : (diffHours > 0 ? `+${diffHours}HRS` : `${diffHours}HRS`);
+
+          item.innerHTML = `
+            <svg class="ac-dial" viewBox="-50 -50 100 100">
+              <circle r="46" class="ac-face"/>
+              <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(0)"/>
+              <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(90)"/>
+              <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(180)"/>
+              <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(270)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(30)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(60)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(120)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(150)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(210)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(240)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(300)"/>
+              <line y1="-40" y2="-43" class="ac-tick" transform="rotate(330)"/>
+              <line class="ac-hand hour" y2="-22" transform="rotate(${hDeg})"/>
+              <line class="ac-hand min" y2="-32" transform="rotate(${mDeg})"/>
+              <line class="ac-hand sec" y2="-36" transform="rotate(${sDeg})"/>
+              <circle r="2" class="ac-pin"/>
+            </svg>
+            <div class="ac-info">
+              <b>${esc(cityName)}</b>
+              <small>${esc(diffStr)}</small>
+            </div>
+          `;
         } catch {
-          row.innerHTML = `<span class="ri">${lucide('globe', 'ri-svg', 16)}</span><div><b class="c"></b><small>Unknown time zone</small></div>`;
-          $('.c', row).textContent = z;
+          item.innerHTML = `<div class="ac-info"><b>${esc(z)}</b><small>Invalid zone</small></div>`;
         }
-        rows.append(row);
+        box.append(item);
       });
-    }, 5000);
+    }, 1000);
   },
 
   async weather(o) {
@@ -157,7 +204,7 @@ const W = {
       const [icon, text] = WX(d.code, d.isDay);
       const c = d.code;
       card.dataset.sky = c >= 95 ? 'storm' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c === 3 || (c >= 45 && c <= 48) ? 'cloud' : d.isDay ? 'day' : 'night';
-      const hours = d.hours.map((h) => `<div class="hour">${esc(h.h.slice(0, 2))}<span>${WX(h.code, true)[0]}</span><b>${Math.round(h.t)}°</b></div>`).join('');
+      const hours = (d.hours || []).slice(0, 5).map((h) => `<div class="hour">${esc(h.h.slice(0, 2))}<span>${lucide(WX_ICON_NAME(h.code, true), '', 16)}</span><b>${Math.round(h.t)}°</b></div>`).join('');
       box.innerHTML = `<div class="wcity">${esc(d.city)}, ${esc(d.country || '')} <span class="muted">- ${esc(text)}</span></div><div class="wmain"><div class="wicon">${icon}</div><div class="wtemp grad">${Math.round(d.temp)}${esc(d.unit)}</div></div>`
         + `<div class="wmeta"><span>Feels ${Math.round(d.feels)}°</span><span>H ${Math.round(d.hi)}° L ${Math.round(d.lo)}°</span><span>${lucide('droplet', '', 13)} ${d.humidity}%</span><span>${lucide('wind', '', 13)} ${Math.round(d.wind)} ${esc(d.windUnit)}</span></div>`
         + `<div class="wmeta"><span>${lucide('sunrise', '', 13)} ${esc(d.sunrise)}</span><span>${lucide('sunset', '', 13)} ${esc(d.sunset)}</span></div><div class="hours">${hours}</div>`;

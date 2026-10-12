@@ -97,6 +97,22 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') window.api.hide();
 });
 
+// Quick shortcut chips
+const setupChip = (id, query) => {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    input.value = query;
+    input.focus();
+    update();
+  };
+};
+setupChip('chip-apps', 'type:app ');
+setupChip('chip-folders', 'type:folder ');
+setupChip('chip-files', 'type:file ');
+setupChip('chip-calc', '12 * 5 + ');
+
 new ResizeObserver(() => window.api.resize(Math.ceil(wrap.getBoundingClientRect().height))).observe(wrap);
 
 function applyPrefs(p) {
@@ -108,6 +124,7 @@ function applyPrefs(p) {
   r.setProperty('--pad', rounded ? '18px' : '0px');
   recents = p.search.recents;
   document.body.classList.toggle('rounded', rounded);
+  document.body.classList.toggle('noshadow', !p.launcherShadow);
   document.body.classList.toggle('acrylic', !rounded);
   document.body.classList.toggle('noanim', !p.animations);
 }

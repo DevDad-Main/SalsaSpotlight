@@ -88,15 +88,18 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .foot { margin-top: auto; padding-top: 8px; text-align: center; font-size: 12px; color: var(--muted); }
 
 /* rows (specs, world clock) */
-.rows { display: flex; flex-direction: column; gap: 5px; flex: 1; overflow: hidden; }
-.row { display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 14px; background: var(--tile); animation: rise 0.45s both; }
-.row .ri { font-size: 17px; width: 24px; text-align: center; flex: none; }
-.row div { min-width: 0; flex: 1; }
-.row small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); }
-.row b { display: block; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row .rt { flex: none; text-align: right; font-size: 21px; font-weight: 300; }
+.rows { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
+.rows::-webkit-scrollbar { width: 3px; }
+.rows::-webkit-scrollbar-thumb { background: var(--track); border-radius: 3px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 8px; background: transparent; border-bottom: 1px solid rgba(255, 255, 255, 0.05); animation: rise 0.3s both; }
+.row:last-child { border-bottom: 0; }
+.row .ri { font-size: 15px; width: 22px; height: 22px; display: grid; place-items: center; color: var(--accent); flex: none; }
+.row div { min-width: 0; flex: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.row small { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.row b { font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.row .rt { flex: none; text-align: right; font-size: 20px; font-weight: 300; }
 .row .rt small { font-size: 10px; }
-.row.hl { background: color-mix(in srgb, var(--green) 20%, transparent); }
+.row.hl { background: color-mix(in srgb, var(--green) 15%, transparent); }
 
 /* disks + progress bars */
 .disk { margin-bottom: 12px; }
@@ -109,15 +112,19 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .pr:nth-child(4) .fill { background: var(--red); }
 
 /* weather */
-.wx { flex: 1; display: flex; flex-direction: column; }
-.wcity { font-size: 15px; font-weight: 600; }
+.wx { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.wcity { font-size: 14px; font-weight: 600; }
 .wmain { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
-.wicon { font-size: 50px; animation: bob 4s ease-in-out infinite; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25)); }
-@keyframes bob { 50% { transform: translateY(-5px) rotate(3deg); } }
-.wtemp { font: 200 58px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
-.wmeta { display: flex; gap: 14px; font-size: 12px; margin: 6px 0 0; color: var(--muted); }
-.hours { display: flex; justify-content: space-between; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--track); }
-.hour { text-align: center; font-size: 11px; color: var(--muted); }
+.wicon { font-size: 40px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25)); }
+.wtemp { font: 200 48px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+.wmeta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11.5px; margin: 4px 0 0; color: var(--muted); }
+.hours { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--track); }
+.hour { text-align: center; font-size: 10.5px; color: var(--muted); }
+.hour span { display: block; height: 20px; line-height: 20px; margin: 2px 0; }
+.hour span svg { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
+.hour b { color: var(--text); font-weight: 500; font-size: 11px; }
+.w-weather .hour b { color: #fff; }
+.wmsg { margin: auto; text-align: center; color: var(--muted); font-size: 13px; }
 .hour span { display: block; font-size: 18px; margin: 2px 0; }
 .hour b { color: var(--text); font-weight: 500; }
 .w-weather .hour b { color: #fff; }
@@ -127,7 +134,21 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .cal-head span { -webkit-app-region: no-drag; cursor: pointer; color: var(--red); font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .cal-head button { background: var(--tile); border: 0; border-radius: 50%; width: 24px; height: 24px; }
-.cal-head button:hover { background: var(--track); }
+/* analog world clocks */
+.analog-clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 10px; align-items: center; justify-content: space-around; flex: 1; padding: 4px 0; }
+.ac-item { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.ac-dial { width: 62px; height: 62px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25)); }
+.ac-face { fill: rgba(255, 255, 255, 0.06); stroke: rgba(255, 255, 255, 0.12); stroke-width: 1.5; }
+.ac-tick { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; stroke-linecap: round; }
+.ac-tick.major { stroke: rgba(255, 255, 255, 0.85); stroke-width: 1.5; }
+.ac-hand { stroke-linecap: round; }
+.ac-hand.hour { stroke: #ffffff; stroke-width: 2.5; }
+.ac-hand.min { stroke: #e0e5ff; stroke-width: 1.8; }
+.ac-hand.sec { stroke: var(--orange); stroke-width: 1; }
+.ac-pin { fill: var(--orange); }
+.ac-info { margin-top: 6px; }
+.ac-info b { display: block; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75px; }
+.ac-info small { display: block; font-size: 9.5px; color: var(--muted); margin-top: 1px; letter-spacing: 0.02em; font-weight: 500; }
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 12.5px; flex: 1; }
 .grid .dn { color: var(--muted); font-size: 10.5px; font-weight: 600; align-self: center; }
 .grid .d { display: grid; place-items: center; border-radius: 50%; aspect-ratio: 1; }

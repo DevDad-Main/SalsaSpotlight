@@ -32,6 +32,7 @@ const PAGES = {
       { key: 'launcherRadius', label: 'Corner rounding', type: 'range', min: 0, max: 36, step: 1, fmt: px },
       { key: 'launcherWidth', label: 'Width', type: 'range', min: 560, max: 900, step: 20, fmt: px },
       { key: 'launcherTop', label: 'Distance from top of screen', type: 'range', min: 5, max: 50, step: 1, fmt: (v) => v + '%' },
+      { key: 'launcherShadow', label: 'Spotlight soft shadow', desc: 'Adds a soft blended drop shadow around the spotlight bar', type: 'toggle' },
     ] },
   ] },
   search: { title: 'Search', icon: '🔍', groups: [
@@ -294,7 +295,9 @@ function widgetPage() {
   main.append(group('Grid', [
     { key: 'snapToGrid', label: 'Snap to grid', desc: 'The grid is sized from your screen, so layouts fit any monitor', type: 'toggle' },
     { key: 'gridCollisions', label: 'Push widgets out of the way', desc: 'Dropping a widget on another moves it to the nearest free spot', type: 'toggle' },
-    { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid', btn: 'Arrange', action: () => window.api.arrange() },
+    { key: 'arrangeAnchor', label: 'Auto-arrange origin', desc: 'Where widgets cluster when auto-arranged', type: 'select',
+      options: [['top-right', 'Top Right (macOS default)'], ['top-left', 'Top Left'], ['bottom-right', 'Bottom Right'], ['bottom-left', 'Bottom Left'], ['center', 'Centered']] },
+    { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid according to size and priority', btn: 'Arrange Now', action: () => window.api.arrange() },
   ], 45));
   const h2 = document.createElement('h2');
   h2.textContent = 'Your widgets (right-click a widget to resize it)';
@@ -314,6 +317,51 @@ function widgetPage() {
   });
 }
 
+function logsPage() {
+  const h1 = document.createElement('h1');
+  h1.textContent = 'Logs';
+  main.append(h1);
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.padding = '18px';
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <b style="font-size:14px">Application & Error Logs</b>
+        <small id="lp" style="display:block;color:var(--muted);font-size:11px;margin-top:2px"></small>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="lcopy">Copy</button>
+        <button class="btn" id="lclear">Clear</button>
+        <button class="btn" id="lopen">Open Folder</button>
+      </div>
+    </div>
+    <textarea id="ltxt" readonly style="width:100%;height:340px;background:rgba(0,0,0,0.3);border:1px solid var(--line);border-radius:8px;padding:12px;color:#f0f0f5;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:0;user-select:text"></textarea>
+  `;
+  main.append(card);
+  const txt = card.querySelector('#ltxt');
+  const pathEl = card.querySelector('#lp');
+  const refreshLogs = () => {
+    window.api.readLogs().then((res) => {
+      pathEl.textContent = res.path;
+      txt.value = res.content || 'Log file is empty.';
+      txt.scrollTop = txt.scrollHeight;
+    }).catch((e) => { txt.value = e.message; });
+  };
+  card.querySelector('#lcopy').onclick = () => {
+    navigator.clipboard.writeText(txt.value);
+    const b = card.querySelector('#lcopy');
+    b.textContent = 'Copied!';
+    setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+  };
+  card.querySelector('#lclear').onclick = () => {
+    window.api.clearLogs();
+    refreshLogs();
+  };
+  card.querySelector('#lopen').onclick = () => window.api.openLogFolder();
+  refreshLogs();
+}
+
 function showPage() {
   controls = [];
   main.replaceChildren();
@@ -321,6 +369,7 @@ function showPage() {
   nav.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.p === page));
   if (page === 'widgets') widgetPage();
   else if (page === 'updates') updatesPage();
+  else if (page === 'logs') logsPage();
   else {
     const h1 = document.createElement('h1');
     h1.textContent = PAGES[page].title;
@@ -342,7 +391,7 @@ function init(s) {
   const first = !state;
   state = s;
   if (first) {
-    const all = { ...PAGES, widgets: { title: 'Widgets', icon: '🧩' }, updates: { title: 'Updates', icon: '⬆️' } };
+    const all = { ...PAGES, widgets: { title: 'Widgets', icon: '🧩' }, updates: { title: 'Updates', icon: '⬆️' }, logs: { title: 'Logs', icon: '📋' } };
     const want = new URLSearchParams(location.search).get('page');
     if (want && all[want]) page = want;
     Object.entries(all).forEach(([id, p]) => {
