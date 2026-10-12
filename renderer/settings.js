@@ -9,7 +9,7 @@ const pct = (v) => Math.round(v * 100) + '%';
 const px = (v) => v + ' px';
 
 const PAGES = {
-  general: { title: 'General', icon: '⚙️', groups: [
+  general: { title: 'General', icon: 'settings', groups: [
     { title: 'Launcher', items: [
       { key: 'hotkey', label: 'Open Spotlight with', desc: 'Falls back to Ctrl + Space if the shortcut is taken', type: 'select', options: KEYS },
       { key: 'launchAtLogin', label: 'Launch at login', desc: 'Starts with Windows for your account only', type: 'toggle' },
@@ -20,7 +20,7 @@ const PAGES = {
     ] },
     { title: 'Reset', items: [{ type: 'button', label: 'Reset all settings', desc: 'Restore the defaults', btn: 'Reset', action: () => window.api.reset() }] },
   ] },
-  appearance: { title: 'Appearance', icon: '🎨', groups: [
+  appearance: { title: 'Appearance', icon: 'palette', groups: [
     { title: 'Theme', items: [
       { key: 'spotlightStyle', label: 'Spotlight style', desc: 'Rounded floating card, or Windows acrylic blur', type: 'select', options: [['rounded', 'Rounded card'], ['acrylic', 'Acrylic (Windows blur)']] },
       { key: 'theme', label: 'Theme', type: 'select', options: [['system', 'Match Windows'], ['dark', 'Dark'], ['light', 'Light']] },
@@ -35,7 +35,7 @@ const PAGES = {
       { key: 'launcherShadow', label: 'Spotlight soft shadow', desc: 'Adds a soft blended drop shadow around the spotlight bar', type: 'toggle' },
     ] },
   ] },
-  search: { title: 'Search', icon: '🔍', groups: [
+  search: { title: 'Search', icon: 'search', groups: [
     { title: 'What to search', items: [
       { key: 'search.apps', label: 'Apps', type: 'toggle' },
       { key: 'search.files', label: 'Files', type: 'toggle' },
@@ -81,6 +81,19 @@ const WIDGET_OPTS = {
     { key: 'widgetOpts.countdown.date', label: 'Date', desc: 'Format YYYY-MM-DD', type: 'text' },
   ],
 };
+
+function lucide(name, size = 16) {
+  const I = {
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    palette: '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    widgets: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    updates: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+    logs: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12h4"/><path d="M10 16h4"/>',
+  };
+  const body = I[name] || I.settings;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle">${body}</svg>`;
+}
 
 const get = (key) => key.split('.').reduce((o, k) => o?.[k], state.prefs);
 const set = (key, v) => window.api.setSetting(key, v);
@@ -391,13 +404,13 @@ function init(s) {
   const first = !state;
   state = s;
   if (first) {
-    const all = { ...PAGES, widgets: { title: 'Widgets', icon: '🧩' }, updates: { title: 'Updates', icon: '⬆️' }, logs: { title: 'Logs', icon: '📋' } };
+    const all = { ...PAGES, widgets: { title: 'Widgets', icon: 'widgets' }, updates: { title: 'Updates', icon: 'updates' }, logs: { title: 'Logs', icon: 'logs' } };
     const want = new URLSearchParams(location.search).get('page');
     if (want && all[want]) page = want;
     Object.entries(all).forEach(([id, p]) => {
       const b = document.createElement('button');
       b.dataset.p = id;
-      b.textContent = `${p.icon}  ${p.title}`;
+      b.innerHTML = `${lucide(p.icon, 16)}  <span>${esc(p.title)}</span>`;
       b.onclick = () => { page = id; showPage(); };
       nav.append(b);
     });

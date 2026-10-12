@@ -217,13 +217,19 @@ function fuzzy(l, q) {
   return j === q.length;
 }
 
-function calc(q) {
-  if (!/^[\d\s+\-*/%^().]+$/.test(q) || !/\d/.test(q) || !/[+\-*/%^]/.test(q.replace(/^\s*-/, ''))) return null;
+function calc(raw) {
+  let q = String(raw || '').trim();
+  if (q.endsWith('=')) q = q.slice(0, -1).trim();
+  q = q.replace(/x/gi, '*').replace(/÷/g, '/').replace(/,/g, '');
+  if (!/^[\d\s+\-*/%^().]+$/.test(q)) return null;
+  if (!/\d/.test(q)) return null;
+  if (!/[+\-*/%^]/.test(q.replace(/^\s*-/, ''))) return null;
+  const expr = q.replace(/\^/g, '**');
   try {
-    const v = Function(`"use strict";return (${q.replace(/\^/g, '**')})`)();
+    const v = Function('"use strict"; return (' + expr + ')')();
     if (typeof v !== 'number' || !isFinite(v)) return null;
     const text = String(Math.round(v * 1e10) / 1e10);
-    return { kind: 'calc', title: text, sub: `${q.trim()} = ${text}  (Enter to copy)`, value: text };
+    return { kind: 'calc', title: text, sub: `${raw.trim()} = ${text}  (Enter to copy)`, value: text };
   } catch { return null; }
 }
 
@@ -398,8 +404,8 @@ function sizeWidget(type, w) {
 function persistPos(w) {
   const t = Object.keys(widgetWins).find((k) => widgetWins[k] === w);
   if (!t || w.isDestroyed()) return;
-  const [x, y] = w.getPosition();
-  settings.widgets[t] = { ...settings.widgets[t], x, y, open: true };
+  const b = w.getBounds();
+  settings.widgets[t] = { ...settings.widgets[t], x: b.x, y: b.y, open: true };
   saveSettings();
   pinAll();
 }
@@ -439,6 +445,7 @@ function openWidget(type) {
   widgetWins[type] = w;
   w.loadFile(path.join(__dirname, 'renderer', 'widget.html'), { query: { type } });
   w.webContents.on('did-finish-load', () => sizeWidget(type, w));
+  w.on('moved', () => persistPos(w));
   w.on('blur', pinAll);
   w.once('ready-to-show', () => { w.__ready = true; applyVisibility(); });
   w.on('closed', () => {

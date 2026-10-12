@@ -220,29 +220,46 @@ const W = {
     const tk = mountSeq;
     if (o.info) {
       window.api.specs().then((sp) => { if (tk === mountSeq && $('#i1')) $('#i1').textContent = `${sp.cpu} (${sp.cores})`; }).catch(() => {});
-      window.api.specsGpu().then((h) => { if (tk === mountSeq && h.cpu && $('#i1')) $('#i1').textContent = `${h.cpu} (${h.cores})`; }).catch(() => {});
+      window.api.specsGpu().then((h) => { if (tk === mountSeq && h && h.cpu && $('#i1')) $('#i1').textContent = `${h.cpu} (${h.cores})`; }).catch(() => {});
     }
     const hist = Array(40).fill(0);
-    every(async () => {
-      const [s, g] = await Promise.all([window.api.stats(), o.gpu ? window.api.gpuStats() : null]);
+    const tick = async () => {
       if (tk !== mountSeq || !$('#c')) return;
-      setGauge('c', s.cpu);
-      setGauge('m', s.mem);
-      if (o.graph) { hist.push(s.cpu); hist.shift(); drawSpark(hist, 100); }
-      if (o.info) $('#i2').textContent = `${s.memUsed.toFixed(1)} / ${s.memTotal.toFixed(1)} GB (${(s.memTotal - s.memUsed).toFixed(1)} free)`;
-      if (g && o.gpu) {
-        $('#gw').hidden = false;
-        setGauge('u', g.util ?? 0);
-        if (o.info) {
-          $('#r3').hidden = false;
-          const vr = g.memUsed != null && g.memTotal ? ` | ${(g.memUsed / 1024).toFixed(1)}/${(g.memTotal / 1024).toFixed(0)} GB` : '';
-          $('#i3').textContent = `${g.name}${vr}${g.temp != null ? ` | ${g.temp}°C` : ''}`;
+      try {
+        const s = await window.api.stats();
+        if (!s) return;
+        setGauge('c', s.cpu || 0);
+        setGauge('m', s.mem || 0);
+        if (o.graph) { hist.push(s.cpu || 0); hist.shift(); drawSpark(hist, 100); }
+        if (o.info && s.memUsed != null && s.memTotal != null) {
+          $('#i2').textContent = `${s.memUsed.toFixed(1)} / ${s.memTotal.toFixed(1)} GB (${(s.memTotal - s.memUsed).toFixed(1)} free)`;
         }
-      }
-      let batt = '';
-      if (o.battery) { try { const b = await navigator.getBattery(); if (b.level < 1 || !b.charging) batt = ` | ${lucide('battery', 'ri-svg', 13)} ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`; } catch { /* no battery */ } }
-      $('#f').innerHTML = `${lucide('clock', 'ri-svg', 12)} Up ${Math.floor(s.uptime / 3600)}h ${Math.floor(s.uptime / 60) % 60}m${batt}`;
-    }, 1500);
+        if (o.gpu) {
+          try {
+            const g = await window.api.gpuStats();
+            if (g && tk === mountSeq) {
+              $('#gw').hidden = false;
+              setGauge('u', g.util ?? 0);
+              if (o.info) {
+                $('#r3').hidden = false;
+                const vr = g.memUsed != null && g.memTotal ? ` | ${(g.memUsed / 1024).toFixed(1)}/${(g.memTotal / 1024).toFixed(0)} GB` : '';
+                $('#i3').textContent = `${g.name || 'GPU'}${vr}${g.temp != null ? ` | ${g.temp}°C` : ''}`;
+              }
+            }
+          } catch { /* optional gpu */ }
+        }
+        let batt = '';
+        if (o.battery) {
+          try {
+            const b = await navigator.getBattery();
+            if (b.level < 1 || !b.charging) batt = ` | ${lucide('battery', 'ri-svg', 13)} ${Math.round(b.level * 100)}%${b.charging ? ' charging' : ''}`;
+          } catch { /* no battery */ }
+        }
+        $('#f').innerHTML = `${lucide('clock', 'ri-svg', 12)} Up ${Math.floor((s.uptime || 0) / 3600)}h ${Math.floor(((s.uptime || 0) / 60)) % 60}m${batt}`;
+      } catch { /* ignore tick errors */ }
+    };
+    tick();
+    every(tick, 1500);
   },
 
   async specs(o) {
@@ -349,7 +366,7 @@ const W = {
       if (Number.isNaN(target.getTime())) { $('#cn').textContent = '?'; $('#cl').textContent = 'Set a date (YYYY-MM-DD) in Settings'; return; }
       const diff = target - new Date();
       const days = Math.ceil(diff / 864e5);
-      $('#cn').textContent = days === 0 ? '🎉' : String(Math.abs(days));
+      $('#cn').innerHTML = days === 0 ? lucide('sparkles', '', 48) : String(Math.abs(days));
       $('#cl').textContent = days === 0 ? `Today: ${o.title}` : days > 0 ? `day${days === 1 ? '' : 's'} until ${o.title}` : `day${days === -1 ? '' : 's'} since ${o.title}`;
       $('#cs').textContent = diff > 0 ? `${Math.floor(diff / 36e5) % 24}h ${Math.floor(diff / 6e4) % 60}m to go today` : '';
     }, 30000);
@@ -462,7 +479,7 @@ const W = {
       list.forEach((t, i) => {
         const r = document.createElement('div');
         r.className = 'todo' + (t.d ? ' done' : '');
-        r.innerHTML = '<div class="cb">✓</div><span></span><button class="del">&times;</button>';
+        r.innerHTML = `<div class="cb">${lucide('check', '', 12)}</div><span></span><button class="del">&times;</button>`;
         $('span', r).textContent = t.t;
         $('.cb', r).onclick = () => { t.d = !t.d; save(); draw(); };
         $('.del', r).onclick = () => { list.splice(i, 1); save(); draw(); };
@@ -569,22 +586,25 @@ function onState(s) {
 let press = null;
 card.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.target.closest('button, input, textarea, select, .list, .tile, .clip, .cb, .cal-head span')) return;
-  press = { x: e.screenX, y: e.screenY, dragging: false, id: e.pointerId };
-  card.setPointerCapture(e.pointerId);
+  press = { x: e.screenX, y: e.screenY, dragging: false };
 });
-card.addEventListener('pointermove', (e) => {
+window.addEventListener('pointermove', (e) => {
   if (!press || press.dragging) return;
-  if (Math.hypot(e.screenX - press.x, e.screenY - press.y) < 5) return;
-  press.dragging = true;
-  card.classList.add('dragging');
-  window.api.dragStart();
+  if (Math.hypot(e.screenX - press.x, e.screenY - press.y) >= 4) {
+    press.dragging = true;
+    card.classList.add('dragging');
+    window.api.dragStart();
+  }
 });
 const release = () => {
-  if (press?.dragging) { card.classList.remove('dragging'); window.api.dragEnd(); }
+  if (press?.dragging) {
+    card.classList.remove('dragging');
+    window.api.dragEnd();
+  }
   press = null;
 };
-card.addEventListener('pointerup', release);
-card.addEventListener('pointercancel', release);
+window.addEventListener('pointerup', release);
+window.addEventListener('pointercancel', release);
 card.addEventListener('contextmenu', (e) => { e.preventDefault(); window.api.widgetMenu(); });
 window.api.onResized(() => { card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop'); });
 

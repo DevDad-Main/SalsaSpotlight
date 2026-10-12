@@ -167,6 +167,29 @@ module.exports = ({ prefs, wins, persist }) => {
     }
   }
 
+  function findFree(rect, d, occupied) {
+    const wa = d.workArea;
+    const s = getScale();
+    const colW = Math.round(BASE_COL_WIDTH * s);
+    const rowH = Math.round(BASE_ROW_HEIGHT * s);
+    const gap = Math.round(GAP * s);
+
+    const start = place(rect, d);
+    const free = (r) => !occupied.some((o) => hit(r, o, 4));
+    if (free(start)) return start;
+
+    for (let ring = 1; ring <= 15; ring++) {
+      for (let dc = -ring; dc <= ring; dc++) {
+        for (let dr = -ring; dr <= ring; dr++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== ring) continue;
+          const cand = clampToScreen({ ...start, x: start.x + dc * (colW + gap), y: start.y + dr * (rowH + gap) }, d);
+          if (free(cand)) return cand;
+        }
+      }
+    }
+    return null;
+  }
+
   function showGridOverlay(d) {
     if (overlayWin || !prefs().snapToGrid) return;
     const wa = d.workArea;
@@ -179,17 +202,17 @@ module.exports = ({ prefs, wins, persist }) => {
     overlayWin = new BrowserWindow({
       x: wa.x, y: wa.y, width: wa.width, height: wa.height,
       transparent: true, frame: false, hasShadow: false, resizable: false,
-      skipTaskbar: true, alwaysOnTop: false, focusable: false, show: false,
+      skipTaskbar: true, alwaysOnTop: true, focusable: false, show: false,
     });
     overlayWin.setIgnoreMouseEvents(true);
 
-    // Check screen bounds
     const cols = Math.min(10, Math.floor((wa.width - 48) / (colW + gap)));
     const rows = Math.min(8, Math.floor((wa.height - 48) / (rowH + gap)));
 
     const originX = wa.x + 24;
     const originY = wa.y + 24;
 
+    let slotsHtml = '';
     for (let c = 0; c < cols; c++) {
       const x = originX + c * (colW + gap);
       for (let r = 0; r < rows; r++) {
@@ -203,16 +226,16 @@ module.exports = ({ prefs, wins, persist }) => {
       body {
         width: 100vw; height: 100vh; overflow: hidden; background: transparent;
         background-image:
-          linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+          linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
         background-size: ${colW + gap}px ${rowH + gap}px;
         background-position: ${originX}px ${originY}px;
       }
       .slot {
         position: absolute;
-        border: 1.5px dashed rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.015);
-        box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.02);
+        border: 2px dashed rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.035);
+        box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.04);
         animation: fadeIn 0.15s ease-out;
       }
       @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
