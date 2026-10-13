@@ -346,9 +346,11 @@ function createWidget(type, el, card, api) {
       }, 60000);
     },
 
-    gpu() {
+    gpu(o) {
+      const showVram = o.showVram !== false, showTemp = o.showTemp !== false, showPower = o.showPower !== false, showClock = o.showClock === true;
       el.innerHTML = `${head('GPU')}<div class="gpu">${gauge('u', 'p', 'GPU')}<div class="gst" data-k="gs"></div></div>`
-        + '<div class="vr"><div class="top"><span class="muted">VRAM</span><span data-k="vt"></span></div><div class="track"><div class="fill" data-k="vf"></div></div></div><div class="foot" data-k="gn"></div>';
+        + (showVram ? '<div class="vr"><div class="top"><span class="muted">VRAM</span><span data-k="vt"></span></div><div class="track"><div class="fill" data-k="vf"></div></div></div>' : '')
+        + '<div class="foot" data-k="gn"></div>';
       const tk = mountSeq;
       every(async () => {
         const g = await api.gpuStats();
@@ -357,9 +359,12 @@ function createWidget(type, el, card, api) {
         setGauge('u', g.util ?? 0);
         const dash = (v, unit) => (v == null ? '-' : `${Math.round(v)}${unit}`);
         const gs = $('[data-k="gs"]', el);
-        if (gs) gs.innerHTML = [['Temperature', dash(g.temp, '°C')], ['Power', dash(g.power, ' W')], ['Clock', dash(g.clock, ' MHz')]]
-          .map(([l, v]) => `<div class="st"><small>${l}</small><b>${esc(v)}</b></div>`).join('');
-        if (g.memTotal) {
+        const stats = [];
+        if (showTemp) stats.push(['Temperature', dash(g.temp, '°C')]);
+        if (showPower) stats.push(['Power', dash(g.power, ' W')]);
+        if (showClock) stats.push(['Clock', dash(g.clock, ' MHz')]);
+        if (gs) gs.innerHTML = stats.map(([l, v]) => `<div class="st"><small>${l}</small><b>${esc(v)}</b></div>`).join('');
+        if (showVram && g.memTotal) {
           const vt = $('[data-k="vt"]', el); if (vt) vt.textContent = `${(g.memUsed / 1024).toFixed(1)} / ${(g.memTotal / 1024).toFixed(0)} GB`;
           const vf = $('[data-k="vf"]', el); if (vf) vf.style.width = (g.memUsed / g.memTotal) * 100 + '%';
         }
@@ -367,7 +372,8 @@ function createWidget(type, el, card, api) {
       }, 1500);
     },
 
-    network() {
+    network(o) {
+      const showIface = o.showIface !== false;
       el.innerHTML = `${head('Network')}<div class="net"><div><small>Download</small><b data-k="nd">0 KB/s</b></div><div><small>Upload</small><b data-k="nu">0 KB/s</b></div></div>${sparkSvg}<div class="foot" data-k="f"></div>`;
       const tk = mountSeq;
       const fmt = (b) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB/s` : `${Math.round(b / 1e3)} KB/s`);
@@ -382,7 +388,7 @@ function createWidget(type, el, card, api) {
         drawSpark(hist, Math.max(1e5, ...hist));
         const nd = $('[data-k="nd"]', el); if (nd) nd.textContent = fmt(n.down);
         const nu = $('[data-k="nu"]', el); if (nu) nu.textContent = fmt(n.up);
-        const f = $('[data-k="f"]', el); if (f) f.textContent = `${n.iface}${ip ? ` | ${ip}` : ''}`;
+        const f = $('[data-k="f"]', el); if (f) f.textContent = showIface ? `${n.iface}${ip ? ` | ${ip}` : ''}` : ip;
       }, 2000);
     },
 
@@ -437,26 +443,33 @@ function createWidget(type, el, card, api) {
       draw();
     },
 
-    async progress() {
+    async progress(o) {
+      const showYear = o.showYear !== false, showDay = o.showDay !== false, greeting = o.greeting !== false;
       const tk = mountSeq;
       let user = 'there';
       try { user = (await api.specs()).user; } catch { /* keep default */ }
       if (tk !== mountSeq) return;
-      el.innerHTML = `${head('Progress')}<div class="hello grad" data-k="hi"></div><div data-k="pl"></div>`;
+      el.innerHTML = `${head('Progress')}${greeting ? '<div class="hello grad" data-k="hi"></div>' : ''}<div data-k="pl"></div>`;
       const draw = () => {
         const n = new Date(), H = n.getHours();
-        const hi = $('[data-k="hi"]', el); if (hi) hi.textContent = `Good ${H < 5 ? 'night' : H < 12 ? 'morning' : H < 18 ? 'afternoon' : 'evening'}, ${user}`;
+        if (greeting) {
+          const hi = $('[data-k="hi"]', el); if (hi) hi.textContent = `Good ${H < 5 ? 'night' : H < 12 ? 'morning' : H < 18 ? 'afternoon' : 'evening'}, ${user}`;
+        }
         const day = (n - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5;
         const wd = ((n.getDay() + 6) % 7 + day) / 7;
         const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
         const mo = (n.getDate() - 1 + day) / dim;
         const ys = new Date(n.getFullYear(), 0, 1), ye = new Date(n.getFullYear() + 1, 0, 1);
         const yr = (n - ys) / (ye - ys);
-        const bars = [['Today', day, `${Math.round((1 - day) * 24)}h left`], ['This week', wd, `${Math.ceil((1 - wd) * 7)} days left`],
-          ['This month', mo, `${dim - n.getDate()} days left`], [String(n.getFullYear()), yr, `${Math.ceil((ye - n) / 864e5)} days left`]];
+        const bars = [];
+        if (showDay) bars.push(['Today', day, `${Math.round((1 - day) * 24)}h left`]);
+        bars.push(['This week', wd, `${Math.ceil((1 - wd) * 7)} days left`]);
+        bars.push(['This month', mo, `${dim - n.getDate()} days left`]);
+        if (showYear) bars.push([String(n.getFullYear()), yr, `${Math.ceil((ye - n) / 864e5)} days left`]);
         const box = $('[data-k="pl"]', el);
         if (!box) return;
-        if (!box.children.length) bars.forEach(() => { const d = document.createElement('div'); d.className = 'pr'; d.innerHTML = '<div class="top"><span></span><span></span></div><div class="track"><div class="fill"></div></div>'; box.append(d); });
+        box.replaceChildren();
+        bars.forEach(() => { const d = document.createElement('div'); d.className = 'pr'; d.innerHTML = '<div class="top"><span></span><span></span></div><div class="track"><div class="fill"></div></div>'; box.append(d); });
         bars.forEach(([l, v, t], i) => {
           const d = box.children[i];
           if (!d) return;
@@ -468,8 +481,9 @@ function createWidget(type, el, card, api) {
       every(draw, 60000);
     },
 
-    timer() {
-      let total = 25 * 60, left = total, end = 0, run = false;
+    timer(o) {
+      const defMins = Math.max(1, Math.min(120, o.defaultMins || 25));
+      let total = defMins * 60, left = total, end = 0, run = false;
       el.innerHTML = `${head('Timer')}<div class="ringwrap" data-k="rw"><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg" data-k="rg" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/></svg><div class="tm" data-k="tm"></div></div>`
         + '<div class="btns" data-k="pre"><button data-m="5">5m</button><button data-m="10">10m</button><button data-m="25">25m</button><button data-m="45">45m</button></div>'
         + '<div class="btns"><button class="main" data-k="go">Start</button><button data-k="rs">Reset</button></div>';
@@ -479,9 +493,10 @@ function createWidget(type, el, card, api) {
         const go = $('[data-k="go"]', el); if (go) go.textContent = run ? 'Pause' : 'Start';
       };
       const beep = () => {
+        if (o.sound === false) return;
         try {
           const ac = new AudioContext();
-          [0, 0.3, 0.6].forEach((t) => { const o = ac.createOscillator(), g = ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value = 880; g.gain.setValueAtTime(0.15, ac.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.25); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.26); });
+          [0, 0.3, 0.6].forEach((t) => { const o2 = ac.createOscillator(), g = ac.createGain(); o2.connect(g); g.connect(ac.destination); o2.frequency.value = 880; g.gain.setValueAtTime(0.15, ac.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.25); o2.start(ac.currentTime + t); o2.stop(ac.currentTime + t + 0.26); });
         } catch { /* audio unavailable */ }
       };
       timers.push(setInterval(() => {
@@ -500,7 +515,8 @@ function createWidget(type, el, card, api) {
       draw();
     },
 
-    todo() {
+    todo(o) {
+      const maxItems = Math.max(3, Math.min(20, o.maxItems || 8));
       let list = [];
       try { list = JSON.parse(localStorage.getItem('todos') || '[]'); } catch { /* corrupt */ }
       el.innerHTML = `${head('To-do', '<span class="muted" data-k="cnt" style="margin-left:auto;margin-right:20px"></span>')}<input class="inp" data-k="in" placeholder="Add a task and press Enter"><div class="list" data-k="ls"></div>`;
@@ -509,7 +525,7 @@ function createWidget(type, el, card, api) {
         const ls = $('[data-k="ls"]', el);
         if (!ls) return;
         ls.replaceChildren();
-        list.forEach((t, i) => {
+        list.slice(0, maxItems).forEach((t, i) => {
           const r = document.createElement('div');
           r.className = 'todo' + (t.d ? ' done' : '');
           r.innerHTML = `<div class="cb">${lucide('check', '', 12)}</div><span></span><button class="del">&times;</button>`;
@@ -530,8 +546,9 @@ function createWidget(type, el, card, api) {
       draw();
     },
 
-    notes() {
-      el.innerHTML = `${head('Notes')}<textarea class="inp" data-k="n" placeholder="Jot something down..."></textarea><div class="saved" data-k="sv">Saved</div>`;
+    notes(o) {
+      const fs = Math.max(11, Math.min(22, o.fontSize || 14));
+      el.innerHTML = `${head('Notes')}<textarea class="inp" data-k="n" placeholder="Jot something down..." style="font-size:${fs}px"></textarea><div class="saved" data-k="sv">Saved</div>`;
       const n = $('[data-k="n"]', el);
       if (!n) return;
       n.value = localStorage.getItem('note') || '';
@@ -546,10 +563,12 @@ function createWidget(type, el, card, api) {
       const sv = $('[data-k="sv"]', el); if (sv) sv.textContent = `${n.value.length} chars`;
     },
 
-    dock() {
-      el.innerHTML = `${head('Frequent apps')}<div class="tiles" data-k="tl"></div>`;
+    dock(o) {
+      const cols = Math.max(3, Math.min(8, o.columns || 4));
+      const maxApps = Math.max(4, Math.min(16, o.maxApps || 8));
+      el.innerHTML = `${head('Frequent apps')}<div class="tiles" data-k="tl" style="grid-template-columns:repeat(${cols},1fr)"></div>`;
       every(async () => {
-        const apps = await api.topApps();
+        const apps = (await api.topApps()).slice(0, maxApps);
         const box = $('[data-k="tl"]', el);
         if (!box) return;
         box.replaceChildren();
@@ -567,14 +586,15 @@ function createWidget(type, el, card, api) {
       }, 30000);
     },
 
-    clipboard() {
+    clipboard(o) {
+      const maxItems = Math.max(5, Math.min(30, o.maxItems || 12));
       el.innerHTML = `<div class="head-row">${head('Clipboard')}<button data-k="cl">Clear</button></div><div class="list" data-k="ls"></div>`;
       const draw = (items) => {
         const ls = $('[data-k="ls"]', el);
         if (!ls) return;
         ls.replaceChildren();
         if (!items.length) { ls.innerHTML = '<div class="wmsg">Copied text appears here.<br>Click an item to copy it again.</div>'; return; }
-        items.forEach((t, i) => {
+        items.slice(0, maxItems).forEach((t, i) => {
           const c = document.createElement('div');
           c.className = 'clip';
           c.textContent = t;
@@ -589,9 +609,12 @@ function createWidget(type, el, card, api) {
 
     // ── NEW WIDGETS ──
 
-    pomodoro() {
-      let mode = 'work', remaining = 25 * 60, running = false, completed = 0, end = 0;
-      const WORK = 25 * 60, BREAK = 5 * 60, LONG = 15 * 60;
+    pomodoro(o) {
+      const WORK = Math.max(5, Math.min(90, o.workMin || 25)) * 60;
+      const BREAK = Math.max(2, Math.min(30, o.breakMin || 5)) * 60;
+      const LONG = Math.max(5, Math.min(60, o.longBreakMin || 15)) * 60;
+      const SESS = Math.max(1, Math.min(8, o.sessionsBeforeLong || 4));
+      let mode = 'work', remaining = WORK, running = false, completed = 0, end = 0;
       el.innerHTML = `${head('Pomodoro')}<div class="ringwrap" data-k="rw"><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg" data-k="rg" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/></svg><div class="tm" data-k="tm"></div></div>`
         + '<div class="foot" data-k="md"></div>'
         + '<div class="btns"><button class="main" data-k="go">Start</button><button data-k="rs">Reset</button></div>'
@@ -611,7 +634,7 @@ function createWidget(type, el, card, api) {
       const beep = () => {
         try {
           const ac = new AudioContext();
-          [0, 0.3, 0.6].forEach((t) => { const o = ac.createOscillator(), g = ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value = mode === 'work' ? 440 : 880; g.gain.setValueAtTime(0.15, ac.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.25); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.26); });
+          [0, 0.3, 0.6].forEach((t) => { const o2 = ac.createOscillator(), g = ac.createGain(); o2.connect(g); g.connect(ac.destination); o2.frequency.value = mode === 'work' ? 440 : 880; g.gain.setValueAtTime(0.15, ac.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.25); o2.start(ac.currentTime + t); o2.stop(ac.currentTime + t + 0.26); });
         } catch { /* audio unavailable */ }
       };
       timers.push(setInterval(() => {
@@ -620,7 +643,7 @@ function createWidget(type, el, card, api) {
         if (remaining <= 0) {
           running = false;
           beep();
-          if (mode === 'work') { completed++; mode = completed % 4 === 0 ? 'long' : 'break'; remaining = mode === 'long' ? LONG : BREAK; }
+          if (mode === 'work') { completed++; mode = completed % SESS === 0 ? 'long' : 'break'; remaining = mode === 'long' ? LONG : BREAK; }
           else { mode = 'work'; remaining = WORK; }
           new Notification(`Pomodoro ${mode === 'work' ? 'break over' : 'done'}`, { body: mode === 'work' ? 'Back to focus!' : 'Time for a break.' });
           const rw = $('[data-k="rw"]', el); if (rw) { rw.classList.add('done'); setTimeout(() => rw.classList.remove('done'), 2200); }
@@ -632,7 +655,8 @@ function createWidget(type, el, card, api) {
       draw();
     },
 
-    habits() {
+    habits(o) {
+      const maxItems = Math.max(3, Math.min(12, o.maxItems || 5));
       let habits = [];
       try { habits = JSON.parse(localStorage.getItem('habits') || '[]'); } catch { /* corrupt */ }
       const today = () => new Date().toDateString();
@@ -645,7 +669,7 @@ function createWidget(type, el, card, api) {
         const ls = $('[data-k="ls"]', el);
         if (!ls) return;
         ls.replaceChildren();
-        habits.forEach((h, i) => {
+        habits.slice(0, maxItems).forEach((h, i) => {
           const checked = isChecked(h);
           const streak = (checkins[h] || []).filter((d) => { const dd = new Date(d); return dd >= new Date(Date.now() - 30 * 864e5); }).length;
           const r = document.createElement('div');
@@ -718,7 +742,8 @@ function createWidget(type, el, card, api) {
       every(fetchStocks, 60000);
     },
 
-    uptime() {
+    uptime(o) {
+      const showSec = o.showSeconds === true;
       el.innerHTML = `${head('System Uptime')}<div class="time grad" data-k="up">--</div><div class="foot" data-k="bt"></div>`;
       const tk = mountSeq;
       every(async () => {
@@ -732,7 +757,7 @@ function createWidget(type, el, card, api) {
           const m = Math.floor(up / 60) % 60;
           const sec = Math.floor(up) % 60;
           const upEl = $('[data-k="up"]', el);
-          if (upEl) upEl.textContent = d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m ${sec}s`;
+          if (upEl) upEl.textContent = d > 0 ? `${d}d ${h}h ${m}m` : showSec ? `${h}h ${m}m ${sec}s` : `${h}h ${m}m`;
           const bt = $('[data-k="bt"]', el);
           if (bt) {
             try {
@@ -777,23 +802,22 @@ function createWidget(type, el, card, api) {
       const go = $('[data-k="go"]', el); if (go) go.onclick = runTest;
     },
 
-    calendarEvents() {
+    calendarEvents(o) {
+      const showPast = o.showPast === true;
+      const maxEvents = Math.max(3, Math.min(15, o.maxEvents || 6));
       el.innerHTML = `${head('Upcoming')}<div class="rows" data-k="ls"><div class="wmsg">No upcoming events</div></div>`;
       const draw = () => {
+        const now = new Date();
         const events = [];
         try { events.push(...JSON.parse(localStorage.getItem('calendarEvents') || '[]')); } catch { /* corrupt */ }
-        // Add countdown widget dates as upcoming
-        // Add habit streaks
         const ls = $('[data-k="ls"]', el);
         if (!ls) return;
         if (!events.length) {
-          // Show next holidays / notable dates as fallback
-          const now = new Date();
           const year = now.getFullYear();
           const dates = [
             ['New Year', new Date(year, 0, 1)], ['Valentine\'s Day', new Date(year, 1, 14)],
             ['Easter', new Date(year, 3, 20)], ['Christmas', new Date(year, 11, 25)],
-          ].filter(([, d]) => d > now).sort((a, b) => a[1] - b[1]).slice(0, 5);
+          ].filter(([, d]) => d > now).sort((a, b) => a[1] - b[1]).slice(0, maxEvents);
           if (dates.length) {
             ls.replaceChildren();
             dates.forEach(([name, date]) => {
@@ -807,7 +831,8 @@ function createWidget(type, el, card, api) {
           return;
         }
         ls.replaceChildren();
-        events.sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 6).forEach((ev) => {
+        const filtered = events.filter((ev) => showPast || new Date(ev.date) >= now);
+        filtered.sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, maxEvents).forEach((ev) => {
           const days = Math.ceil((new Date(ev.date) - now) / 864e5);
           const r = document.createElement('div');
           r.className = 'row';

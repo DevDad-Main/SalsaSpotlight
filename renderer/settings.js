@@ -2,6 +2,8 @@ const nav = document.getElementById('nav');
 const main = document.getElementById('main');
 let state = null, page = 'general', controls = [], stateReady = false;
 
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
+
 const SWATCHES = ['#8b95ff', '#58b6ff', '#3ed6c0', '#5fd4a0', '#ffb35c', '#ff7a90', '#c084fc'];
 const KEYS = [['Alt+Space', 'Alt + Space'], ['Ctrl+Space', 'Ctrl + Space'], ['Ctrl+Alt+Space', 'Ctrl + Alt + Space'], ['Ctrl+Shift+Space', 'Ctrl + Shift + Space'], ['Alt+Shift+Space', 'Alt + Shift + Space'], ['Ctrl+Alt+S', 'Ctrl + Alt + S']];
 const PEEK_KEYS = [['Alt+W', 'Alt + W'], ['Ctrl+Alt+W', 'Ctrl + Alt + W'], ['Ctrl+Shift+W', 'Ctrl + Shift + W'], ['', 'Disabled']];
@@ -64,6 +66,7 @@ const WIDGET_OPTS = {
   weather: [
     { key: 'widgetOpts.weather.city', label: 'City location', desc: 'Type "auto" to use your detected location, or enter any city name (e.g. London, New York, Tokyo)', type: 'text' },
     { key: 'widgetOpts.weather.units', label: 'Units', type: 'select', options: [['c', 'Celsius, km/h'], ['f', 'Fahrenheit, mph']] },
+    { key: 'widgetOpts.weather.hours', label: 'Show hourly forecast', type: 'toggle' },
   ],
   system: [
     { key: 'widgetOpts.system.graph', label: 'CPU history graph', type: 'toggle' },
@@ -75,10 +78,59 @@ const WIDGET_OPTS = {
     ['rig', 'GeForce NOW rig'], ['host', 'Device name'], ['user', 'User name'], ['os', 'Windows version'], ['cpu', 'Processor'], ['gpu', 'Graphics card'],
     ['ram', 'Memory'], ['screen', 'Display'], ['ip', 'IP address'], ['uptime', 'Uptime'],
   ].map(([k, l]) => ({ key: 'widgetOpts.specs.' + k, label: l, type: 'toggle' })),
-  calendar: [{ key: 'widgetOpts.calendar.mondayFirst', label: 'Week starts on Monday', type: 'toggle' }],
+  calendar: [
+    { key: 'widgetOpts.calendar.mondayFirst', label: 'Week starts on Monday', type: 'toggle' },
+  ],
   countdown: [
     { key: 'widgetOpts.countdown.title', label: 'Event name', type: 'text' },
     { key: 'widgetOpts.countdown.date', label: 'Date', desc: 'Format YYYY-MM-DD', type: 'text' },
+  ],
+  progress: [
+    { key: 'widgetOpts.progress.showYear', label: 'Show year progress', type: 'toggle' },
+    { key: 'widgetOpts.progress.showDay', label: 'Show day progress', type: 'toggle' },
+    { key: 'widgetOpts.progress.greeting', label: 'Show greeting', type: 'toggle' },
+  ],
+  timer: [
+    { key: 'widgetOpts.timer.defaultMins', label: 'Default minutes', type: 'range', min: 1, max: 120, step: 1, fmt: (v) => v + ' min' },
+    { key: 'widgetOpts.timer.sound', label: 'Play sound when done', type: 'toggle' },
+  ],
+  todo: [
+    { key: 'widgetOpts.todo.maxItems', label: 'Maximum visible items', type: 'range', min: 3, max: 20, step: 1, fmt: (v) => v },
+  ],
+  notes: [
+    { key: 'widgetOpts.notes.fontSize', label: 'Font size', type: 'range', min: 11, max: 22, step: 1, fmt: (v) => v + 'px' },
+  ],
+  dock: [
+    { key: 'widgetOpts.dock.columns', label: 'Columns', type: 'range', min: 3, max: 8, step: 1, fmt: (v) => v },
+    { key: 'widgetOpts.dock.maxApps', label: 'Maximum apps shown', type: 'range', min: 4, max: 16, step: 1, fmt: (v) => v },
+  ],
+  clipboard: [
+    { key: 'widgetOpts.clipboard.maxItems', label: 'Maximum items', type: 'range', min: 5, max: 30, step: 1, fmt: (v) => v },
+  ],
+  gpu: [
+    { key: 'widgetOpts.gpu.showVram', label: 'Show VRAM usage', type: 'toggle' },
+    { key: 'widgetOpts.gpu.showTemp', label: 'Show temperature', type: 'toggle' },
+    { key: 'widgetOpts.gpu.showPower', label: 'Show power draw', type: 'toggle' },
+    { key: 'widgetOpts.gpu.showClock', label: 'Show clock speed', type: 'toggle' },
+  ],
+  network: [
+    { key: 'widgetOpts.network.showIface', label: 'Show interface name', type: 'toggle' },
+  ],
+  habits: [
+    { key: 'widgetOpts.habits.maxItems', label: 'Maximum habits', type: 'range', min: 3, max: 12, step: 1, fmt: (v) => v },
+  ],
+  uptime: [
+    { key: 'widgetOpts.uptime.showSeconds', label: 'Show seconds', type: 'toggle' },
+  ],
+  calendarEvents: [
+    { key: 'widgetOpts.calendarEvents.showPast', label: 'Show past events', type: 'toggle' },
+    { key: 'widgetOpts.calendarEvents.maxEvents', label: 'Maximum events', type: 'range', min: 3, max: 15, step: 1, fmt: (v) => v },
+  ],
+  pomodoro: [
+    { key: 'widgetOpts.pomodoro.workMin', label: 'Work minutes', type: 'range', min: 10, max: 60, step: 5, fmt: (v) => v + ' min' },
+    { key: 'widgetOpts.pomodoro.breakMin', label: 'Break minutes', type: 'range', min: 3, max: 30, step: 1, fmt: (v) => v + ' min' },
+    { key: 'widgetOpts.pomodoro.longBreakMin', label: 'Long break minutes', type: 'range', min: 10, max: 45, step: 5, fmt: (v) => v + ' min' },
+    { key: 'widgetOpts.pomodoro.sessionsBeforeLong', label: 'Sessions before long break', type: 'range', min: 2, max: 6, step: 1, fmt: (v) => v },
   ],
 };
 
@@ -314,6 +366,7 @@ function widgetPage() {
   main.append(group('Grid', [
     { key: 'snapToGrid', label: 'Snap to grid', desc: 'The grid is sized from your screen, so layouts fit any monitor', type: 'toggle' },
     { key: 'gridCollisions', label: 'Push widgets out of the way', desc: 'Dropping a widget on another moves it to the nearest free spot', type: 'toggle' },
+    { key: 'widgetGap', label: 'Gap between widgets', type: 'range', min: 0, max: 30, step: 1, fmt: px },
     { key: 'arrangeAnchor', label: 'Auto-arrange origin', desc: 'Where widgets cluster when auto-arranged', type: 'select',
       options: [['top-right', 'Top Right (macOS default)'], ['top-left', 'Top Left'], ['bottom-right', 'Bottom Right'], ['bottom-left', 'Bottom Left'], ['center', 'Centered']] },
     { type: 'button', label: 'Show all widgets', desc: 'Open every widget at once', btn: 'Show All', action: () => { Object.keys(state.widgets).forEach((t) => { if (!state.open[t]) window.api.toggleWidget(t); }); } },
@@ -429,7 +482,7 @@ function init(s) {
     } else refresh();
   } catch (e) {
     console.error('Settings init failed:', e);
-    showError();
+    showError(e);
   }
 }
 
@@ -445,8 +498,9 @@ function showLoading() {
   }
 }
 
-function showError() {
-  main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)"><div style="color:var(--red, #ff453a)">${lucide('alert', 32)}</div><div style="font-size:14px">Could not load settings</div><button class="btn" onclick="location.reload()">Retry</button></div>`;
+function showError(err) {
+  const detail = err ? `<div style="font-size:11px;color:var(--muted);max-width:500px;word-break:break-all;margin-top:8px;font-family:monospace">${esc(err.message || String(err))}</div>` : '';
+  main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)"><div style="color:var(--red, #ff453a)">${lucide('alert', 32)}</div><div style="font-size:14px">Could not load settings</div>${detail}<button class="btn" onclick="location.reload()">Retry</button></div>`;
 }
 
 showLoading();
@@ -458,10 +512,10 @@ function bootstrap() {
   try {
     window.api.onState(init);
     window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
-    window.api.getState().then((s) => { if (!stateReady) init(s); }).catch((e) => { console.error('getState failed:', e); if (!stateReady) showError(); });
+    window.api.getState().then((s) => { if (!stateReady) init(s); }).catch((e) => { console.error('getState failed:', e); if (!stateReady) showError(e); });
   } catch (e) {
     console.error('Settings bootstrap failed:', e);
-    showError();
+    showError(e);
   }
 }
 // Retry bootstrap until window.api is available (preload may load late)

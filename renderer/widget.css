@@ -21,6 +21,8 @@ button { font: inherit; color: inherit; -webkit-app-region: no-drag; cursor: poi
   border: 1px solid var(--edge);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.2);
   transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+  container-type: size;
+  container-name: card;
 }
 body.hidden .card { opacity: 0; transform: scale(0.94) translateY(10px); }
 .orb { display: none; }
@@ -42,8 +44,10 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .grad { color: inherit; }
 
 /* per-widget skins */
-.w-notes { background: linear-gradient(160deg, #ffe27a, #f7c43f); color: #3a2e05; --muted: rgba(58, 46, 5, 0.6); --tile: rgba(58, 46, 5, 0.08); --track: rgba(58, 46, 5, 0.15); border-color: rgba(0, 0, 0, 0.08); }
+.w-notes { background: linear-gradient(160deg, #ffe27a, #f7c43f); color: #3a2e05; --text: #3a2e05; --muted: rgba(58, 46, 5, 0.6); --tile: rgba(58, 46, 5, 0.08); --track: rgba(58, 46, 5, 0.15); border-color: rgba(0, 0, 0, 0.08); }
 .w-notes .x { color: rgba(58, 46, 5, 0.6); }
+.w-notes .inp { color: #3a2e05; }
+.w-notes .inp::placeholder { color: rgba(58, 46, 5, 0.45); }
 .w-weather { color: #fff; --muted: rgba(255, 255, 255, 0.75); --tile: rgba(255, 255, 255, 0.14); --track: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.15); background: linear-gradient(160deg, #4aa3f0, #2a6fd6); }
 .w-weather[data-sky="night"] { background: linear-gradient(160deg, #26356b, #0e1433); }
 .w-weather[data-sky="cloud"] { background: linear-gradient(160deg, #8796aa, #5a6a7e); }
@@ -249,3 +253,194 @@ body.noshadow .card { box-shadow: none; }
 
 /* calendarEvents */
 .w-calendarEvents .rows { flex: 1; overflow-y: auto; }
+
+/* ── Responsive container queries: widgets adapt when resized ── */
+
+/* Large clock: bigger time, bigger analog, centered */
+@container card (min-width: 420px) {
+  .w-clock .time { font-size: 76px; }
+  .w-clock .time small { font-size: 24px; }
+  .w-clock .date { font-size: 18px; }
+  .w-clock .analog svg { width: 160px; height: 160px; }
+  .w-clock .bigday { font-size: 34px; }
+}
+@container card (min-width: 600px) {
+  .w-clock .time { font-size: 100px; }
+  .w-clock .time small { font-size: 30px; }
+  .w-clock .date { font-size: 22px; margin-top: 16px; }
+  .w-clock .analog { justify-content: center; }
+  .w-clock .analog svg { width: 200px; height: 200px; }
+  .w-clock .bigday { font-size: 42px; }
+}
+
+/* Tall clock: center content vertically */
+@container card (min-height: 340px) {
+  .w-clock .content { justify-content: center; align-items: flex-start; }
+  .w-clock .bar { margin-top: 32px; }
+}
+
+/* Large weather */
+@container card (min-width: 420px) {
+  .w-weather .wtemp { font-size: 62px; }
+  .w-weather .wicon { font-size: 52px; }
+  .w-weather .wcity { font-size: 16px; }
+  .w-weather .hours { justify-content: flex-start; gap: 20px; }
+  .w-weather .hour span { font-size: 22px; }
+}
+@container card (min-width: 600px) {
+  .w-weather .wtemp { font-size: 80px; }
+  .w-weather .wicon { font-size: 64px; }
+  .w-weather .hour { flex: 1; max-width: 70px; }
+}
+
+/* Large countdown */
+@container card (min-width: 420px) {
+  .w-countdown .cdn { font-size: 88px; }
+  .w-countdown .cdl { font-size: 17px; }
+}
+@container card (min-width: 600px) {
+  .w-countdown .cdn { font-size: 110px; }
+  .w-countdown .cdl { font-size: 20px; }
+}
+@container card (min-height: 280px) {
+  .w-countdown .cd { justify-content: center; align-items: center; text-align: center; }
+}
+
+/* Large system: bigger gauges */
+@container card (min-width: 420px) {
+  .w-system .g { width: 120px; height: 120px; }
+  .w-system .g .v { font-size: 26px; }
+  .w-system .spark { height: 56px; }
+}
+@container card (min-width: 600px) {
+  .w-system .g { width: 148px; height: 148px; }
+  .w-system .g .v { font-size: 30px; }
+  .w-system .spark { height: 72px; }
+  .w-system .gauges { justify-content: center; gap: 24px; }
+}
+
+/* Large timer */
+@container card (min-width: 420px) {
+  .w-timer .ringwrap { width: 168px; height: 168px; }
+  .w-timer .ringwrap .tm { font-size: 40px; }
+}
+@container card (min-width: 600px) {
+  .w-timer .ringwrap { width: 200px; height: 200px; }
+  .w-timer .ringwrap .tm { font-size: 48px; }
+  .w-timer .ringwrap circle { stroke-width: 9; }
+}
+
+/* Large quote */
+@container card (min-width: 420px) {
+  .w-quote .qt { font-size: 26px; }
+}
+@container card (min-width: 600px) {
+  .w-quote .qt { font-size: 32px; }
+}
+
+/* Large uptime / speedtest */
+@container card (min-width: 420px) {
+  .w-uptime .time { font-size: 56px; }
+  .w-speedtest .time { font-size: 48px; }
+}
+@container card (min-width: 600px) {
+  .w-uptime .time { font-size: 72px; }
+  .w-speedtest .time { font-size: 60px; }
+}
+
+/* Large network */
+@container card (min-width: 420px) {
+  .w-network .net b { font-size: 36px; }
+}
+@container card (min-width: 600px) {
+  .w-network .net b { font-size: 44px; }
+}
+
+/* Large worldclock: bigger analog dials */
+@container card (min-width: 420px) {
+  .w-worldclock .analog-clocks { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 16px; }
+  .w-worldclock .ac-dial { width: 88px; height: 88px; }
+  .w-worldclock .ac-info b { font-size: 13px; max-width: 100px; }
+  .w-worldclock .ac-info small { font-size: 11px; }
+}
+
+/* Large calendar */
+@container card (min-width: 420px) {
+  .w-calendar .grid { font-size: 14.5px; gap: 3px; }
+  .w-calendar .grid .dn { font-size: 12px; }
+}
+@container card (min-height: 420px) {
+  .w-calendar .grid { font-size: 16px; }
+  .w-calendar .grid .dn { font-size: 13px; }
+}
+
+/* Large progress */
+@container card (min-width: 420px) {
+  .w-progress .hello { font-size: 22px; }
+  .w-progress .pr .top { font-size: 14px; }
+  .w-progress .track { height: 11px; }
+}
+@container card (min-width: 600px) {
+  .w-progress .hello { font-size: 26px; }
+  .w-progress .pr .top { font-size: 15px; }
+  .w-progress .track { height: 13px; }
+}
+
+/* Large clipboard */
+@container card (min-width: 420px) {
+  .w-clipboard .clip { font-size: 13.5px; -webkit-line-clamp: 3; }
+}
+
+/* Large dock */
+@container card (min-width: 420px) {
+  .w-dock .tiles { grid-template-columns: repeat(5, 1fr); }
+  .w-dock .tile img { width: 42px; height: 42px; }
+  .w-dock .tile { font-size: 11.5px; border-radius: 18px; }
+}
+@container card (min-width: 600px) {
+  .w-dock .tiles { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .w-dock .tile img { width: 48px; height: 48px; }
+}
+
+/* Large specs: bigger text */
+@container card (min-width: 420px) {
+  .w-specs .row b { font-size: 13.5px; }
+  .w-specs .row small { font-size: 12px; }
+  .w-specs .row { padding: 6px 8px; }
+}
+
+/* Large todo / notes */
+@container card (min-width: 420px) {
+  .w-todo .todo { font-size: 14.5px; }
+  .w-notes textarea.inp { font-size: 16px; }
+  .w-notes .saved { font-size: 12.5px; }
+}
+
+/* Large pomodoro */
+@container card (min-width: 420px) {
+  .w-pomodoro .ringwrap { width: 168px; height: 168px; }
+  .w-pomodoro .ringwrap .tm { font-size: 40px; }
+}
+@container card (min-width: 600px) {
+  .w-pomodoro .ringwrap { width: 200px; height: 200px; }
+  .w-pomodoro .ringwrap .tm { font-size: 48px; }
+}
+
+/* Large GPU */
+@container card (min-width: 420px) {
+  .w-gpu .st b { font-size: 20px; }
+  .w-gpu .net b, .w-gpu .gst .st b { font-size: 22px; }
+}
+
+/* Large calendarEvents */
+@container card (min-width: 420px) {
+  .w-calendarEvents .row b { font-size: 13.5px; }
+  .w-calendarEvents .row { padding: 6px 8px; }
+}
+
+/* Shrink padding on small cards */
+@container card (max-width: 280px) {
+  .card { padding: 12px 14px; }
+  .w-clock .time { font-size: 44px; }
+  .w-weather .wtemp { font-size: 38px; }
+}
