@@ -58,11 +58,10 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .w-timer { --accent: var(--orange); }
 
 /* clock */
-.w-clock .content { justify-content: center; }
+.w-clock .content { justify-content: center; align-items: center; text-align: center; }
 .time { font: 200 52px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -0.03em; }
 .time small { font-size: 16px; font-weight: 400; margin-left: 6px; letter-spacing: 0; color: var(--muted); }
 .date { margin-top: 8px; color: var(--red); font-size: 13px; font-weight: 600; }
-.w-clock .time { font-size: 52px; }
 .bar { margin-top: auto; height: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--orange); transition: width 0.9s linear; }
 .analog { display: flex; align-items: center; justify-content: center; gap: 16px; flex: 1; }
@@ -171,7 +170,7 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .ringwrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
 .ringwrap circle { fill: none; stroke-width: 7; stroke-linecap: round; }
 .ringwrap .bg { stroke: var(--track); }
-.ringwrap .fg { stroke: var(--orange); transition: stroke-dashoffset 0.3s linear; }
+.ringwrap .fg { stroke: var(--orange); }
 .ringwrap .tm { position: absolute; inset: 0; display: grid; place-items: center; font: 200 32px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
 .ringwrap.done { animation: shake 0.5s ease 4; }
 @keyframes shake { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
@@ -277,8 +276,8 @@ body.noshadow .card { box-shadow: none; }
 
 /* Tall clock: center content vertically */
 @container card (min-height: 280px) {
-  .w-clock .content { justify-content: center; align-items: flex-start; }
-  .w-clock .bar { margin-top: 24px; }
+  .w-clock .content { justify-content: center; align-items: center; }
+  .w-clock .bar { margin-top: 24px; width: 100%; }
 }
 
 /* Large weather */
@@ -304,8 +303,20 @@ body.noshadow .card { box-shadow: none; }
   .w-countdown .cdn { font-size: 110px; }
   .w-countdown .cdl { font-size: 20px; }
 }
-@container card (min-height: 280px) {
+@container card (min-height: 240px) {
   .w-countdown .cd { justify-content: center; align-items: center; text-align: center; }
+}
+
+/* Center uptime/speedtest when tall */
+@container card (min-height: 200px) {
+  .w-uptime .content { justify-content: center; align-items: center; text-align: center; }
+  .w-speedtest .content { justify-content: center; align-items: center; text-align: center; }
+  .w-quote .content { justify-content: center; }
+}
+
+/* Center progress when tall */
+@container card (min-height: 300px) {
+  .w-progress .content { justify-content: center; }
 }
 
 /* Large system: bigger gauges */

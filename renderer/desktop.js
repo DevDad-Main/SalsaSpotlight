@@ -25,13 +25,15 @@
     const waH = window.screen.height;
     const cols = Math.max(3, Math.min(8, Math.floor(waW / 400)));
     const cellH = Math.round(waH / 22);
+    const maxRows = Math.ceil(waH / cellH);
 
     grid = GridStack.init({
       column: cols,
       cellHeight: cellH,
       margin: 12,
-      float: true,
+      float: false,
       animate: true,
+      maxRow,
       resizable: { handles: 'e, se, s, sw, w' },
       draggable: { handle: '.card', scroll: false },
       acceptWidgets: false,
@@ -40,10 +42,16 @@
 
     grid.on('change', () => saveLayout());
     grid.on('dragstart', () => { dragging = true; window.api.setClickThrough(false); });
-    grid.on('dragstop', () => { dragging = false; saveLayout(); updateClickThrough(); });
+    grid.on('dragstop', (_e, el) => {
+      dragging = false;
+      clampWidget(el);
+      saveLayout();
+      updateClickThrough();
+    });
     grid.on('resizestart', () => { dragging = true; window.api.setClickThrough(false); });
     grid.on('resizestop', (_e, el) => {
       dragging = false;
+      clampWidget(el);
       updateClickThrough();
       const type = el.dataset.type;
       if (!type || !instances[type] || !state) return;
@@ -90,6 +98,22 @@
     instances[type].inst.destroy();
     grid.removeWidget(instances[type].item, true);
     delete instances[type];
+  }
+
+  // Clamp widget position to grid bounds so it never goes off screen
+  function clampWidget(el) {
+    if (!grid) return;
+    const cols = grid.opts.column;
+    const maxRows = grid.opts.maxRow || 50;
+    let x = parseInt(el.getAttribute('gs-x') || 0);
+    let y = parseInt(el.getAttribute('gs-y') || 0);
+    const w = parseInt(el.getAttribute('gs-w') || 1);
+    const h = parseInt(el.getAttribute('gs-h') || 1);
+    const nx = Math.max(0, Math.min(x, cols - w));
+    const ny = Math.max(0, Math.min(y, maxRows - h));
+    if (nx !== x || ny !== y) {
+      grid.update(el, { x: nx, y: ny }, false);
+    }
   }
 
   // ── Layout persistence ──

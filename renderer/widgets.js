@@ -489,7 +489,7 @@ function createWidget(type, el, card, api) {
         + '<div class="btns"><button class="main" data-k="go">Start</button><button data-k="rs">Reset</button></div>';
       const draw = () => {
         const tm = $('[data-k="tm"]', el); if (tm) tm.textContent = `${pad(Math.floor(left / 60))}:${pad(Math.ceil(left) % 60)}`;
-        const rg = $('[data-k="rg"]', el); if (rg) rg.style.strokeDashoffset = CIRC * (1 - left / total);
+        const rg = $('[data-k="rg"]', el); if (rg) rg.setAttribute('stroke-dashoffset', CIRC * (1 - left / total));
         const go = $('[data-k="go"]', el); if (go) go.textContent = run ? 'Pause' : 'Start';
       };
       const beep = () => {
@@ -583,7 +583,7 @@ function createWidget(type, el, card, api) {
           api.icon(a.p).then((u) => { if (u) { const img = $('img', t); if (img) img.src = u; } });
           box.append(t);
         });
-      }, 30000);
+      }, 10000);
     },
 
     clipboard(o) {
@@ -624,7 +624,7 @@ function createWidget(type, el, card, api) {
         const rg = $('[data-k="rg"]', el);
         if (rg) {
           const total = mode === 'work' ? WORK : mode === 'break' ? BREAK : LONG;
-          rg.style.strokeDashoffset = CIRC * (1 - remaining / total);
+          rg.setAttribute('stroke-dashoffset', CIRC * (1 - remaining / total));
           rg.classList.toggle('o', mode === 'work');
         }
         const go = $('[data-k="go"]', el); if (go) go.textContent = running ? 'Pause' : 'Start';

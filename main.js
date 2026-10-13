@@ -89,7 +89,7 @@ const DEFAULTS = {
   launcherRadius: 22,
   launcherWidth: 700,
   launcherTop: 20,
-  launcherShadow: true,
+  launcherShadow: false,
   arrangeAnchor: 'top-right',
   tint: 0.45,
   animations: true,
@@ -938,7 +938,7 @@ ipcMain.handle('disks', () => {
 });
 ipcMain.handle('weather', (_e, city, units) => getWeather(String(city), units === 'f' ? 'f' : 'c'));
 ipcMain.handle('top-apps', () => Object.entries(settings.usage)
-  .filter(([, u]) => u.k === 2).sort((a, b) => b[1].c - a[1].c).slice(0, 8).map(([p, u]) => ({ p, n: u.n })));
+  .filter(([, u]) => u.k >= 2).sort((a, b) => b[1].c - a[1].c).slice(0, 16).map(([p, u]) => ({ p, n: u.n })));
 ipcMain.on('open-path', (_e, p) => { if (settings.usage[p]) shell.openPath(p); });
 ipcMain.handle('clip-get', () => clipHistory);
 ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(clipHistory[i]); });
