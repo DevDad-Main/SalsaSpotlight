@@ -83,13 +83,23 @@
     return item;
   }
 
+  // Get anchor-appropriate starting column for new widgets
+  function anchorStartCol(w) {
+    const cols = grid.opts.column;
+    const anchor = state?.prefs?.arrangeAnchor || 'top-right';
+    if (anchor === 'top-left' || anchor === 'bottom-left') return 0;
+    if (anchor === 'center') return Math.max(0, Math.floor((cols - w) / 2));
+    return Math.max(0, cols - w); // top-right, bottom-right (default)
+  }
+
   function mountWidget(type) {
     if (!state || instances[type]) return;
     const item = createGridItem(type);
     gridEl.appendChild(item);
     const h = DEFAULT_H[type] || 4;
-    // Pass w/h explicitly so gridstack doesn't squeeze into a 1x1 gap
-    grid.makeWidget(item, { w: 1, h });
+    // Position based on arrange anchor so new widgets appear in the right zone
+    const x = anchorStartCol(1);
+    grid.makeWidget(item, { w: 1, h, x, autoPosition: false });
     instances[type].inst.mount(state.prefs.widgetOpts[type], state.prefs);
   }
 
@@ -170,10 +180,17 @@
 
     if (!prev && s.widgetLayout) loadLayout(s.widgetLayout);
 
-    // Apply widget gap from prefs
-    if (grid && typeof s.prefs.widgetGap === 'number') {
-      grid.opts.margin = s.prefs.widgetGap;
-      grid.margin(s.prefs.widgetGap);
+    // Apply widget gap from prefs — set gridstack CSS vars directly for live updates
+    if (typeof s.prefs.widgetGap === 'number') {
+      const g = s.prefs.widgetGap + 'px';
+      document.documentElement.style.setProperty('--gs-item-margin-top', g);
+      document.documentElement.style.setProperty('--gs-item-margin-right', g);
+      document.documentElement.style.setProperty('--gs-item-margin-bottom', g);
+      document.documentElement.style.setProperty('--gs-item-margin-left', g);
+      if (grid) {
+        grid.opts.margin = s.prefs.widgetGap;
+        try { grid.margin(s.prefs.widgetGap); } catch {}
+      }
     }
 
     document.body.classList.toggle('hidden', paused);
