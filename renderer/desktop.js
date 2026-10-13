@@ -38,11 +38,12 @@
       removable: false,
     }, gridEl);
 
-    grid.on('change', () => saveLayout());
+    grid.on('change', () => { clampAllWidgets(); saveLayout(); });
     grid.on('dragstart', () => { dragging = true; window.api.setClickThrough(false); });
     grid.on('dragstop', (_e, el) => {
       dragging = false;
       clampWidget(el);
+      clampAllWidgets();
       saveLayout();
       updateClickThrough();
     });
@@ -50,6 +51,7 @@
     grid.on('resizestop', (_e, el) => {
       dragging = false;
       clampWidget(el);
+      clampAllWidgets();
       updateClickThrough();
       const type = el.dataset.type;
       if (!type || !instances[type] || !state) return;
@@ -110,9 +112,9 @@
     delete instances[type];
   }
 
-  // Clamp widget position to grid bounds so it never goes off screen
+  // Clamp a single widget to grid bounds
   function clampWidget(el) {
-    if (!grid) return;
+    if (!grid || !el) return;
     const cols = grid.opts.column;
     const cellH = grid.opts.cellHeight || 50;
     const maxRows = Math.ceil(window.screen.height / cellH);
@@ -124,6 +126,14 @@
     const ny = Math.max(0, Math.min(y, maxRows - h));
     if (nx !== x || ny !== y) {
       grid.update(el, { x: nx, y: ny }, false);
+    }
+  }
+
+  // Clamp ALL widgets — catches pushed widgets that got shoved off-screen
+  function clampAllWidgets() {
+    if (!grid) return;
+    for (const { item } of Object.values(instances)) {
+      clampWidget(item);
     }
   }
 
