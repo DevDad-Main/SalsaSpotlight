@@ -316,6 +316,7 @@ function widgetPage() {
     { key: 'gridCollisions', label: 'Push widgets out of the way', desc: 'Dropping a widget on another moves it to the nearest free spot', type: 'toggle' },
     { key: 'arrangeAnchor', label: 'Auto-arrange origin', desc: 'Where widgets cluster when auto-arranged', type: 'select',
       options: [['top-right', 'Top Right (macOS default)'], ['top-left', 'Top Left'], ['bottom-right', 'Bottom Right'], ['bottom-left', 'Bottom Left'], ['center', 'Centered']] },
+    { type: 'button', label: 'Show all widgets', desc: 'Open every widget at once', btn: 'Show All', action: () => { Object.keys(state.widgets).forEach((t) => { if (!state.open[t]) window.api.toggleWidget(t); }); } },
     { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid according to size and priority', btn: 'Arrange Now', action: () => window.api.arrange() },
   ], 45));
   const h2 = document.createElement('h2');
@@ -448,17 +449,22 @@ function showError() {
 }
 
 showLoading();
-try {
-  window.api.onState(init);
-  window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
-  window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
-} catch (e) {
-  console.error('Settings bootstrap failed:', e);
-  showError();
+let bootstrapped = false;
+function bootstrap() {
+  if (bootstrapped) return;
+  bootstrapped = true;
+  try {
+    window.api.onState(init);
+    window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
+    window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
+  } catch (e) {
+    console.error('Settings bootstrap failed:', e);
+    showError();
+  }
 }
-// Watchdog 1: no state after 3s → error
-setTimeout(() => { if (!stateReady) showError(); }, 3000);
-// Watchdog 2: state received but page still blank → force show error
-setTimeout(() => {
-  if (stateReady && main.innerHTML.includes('Loading settings')) showError();
-}, 5000);
+// Wait for preload API to be ready, then bootstrap
+if (window.api) bootstrap();
+else window.addEventListener('load', () => { if (window.api) bootstrap(); else showError(); });
+
+// Watchdog: generous timeout for GFN's slower sessions
+setTimeout(() => { if (!stateReady) showError(); }, 8000);

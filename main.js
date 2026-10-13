@@ -57,6 +57,11 @@ const WIDGETS = {
   network: { title: 'Network', size: [330, 240] },
   countdown: { title: 'Countdown', size: [330, 180] },
   quote: { title: 'Daily Quote', size: [330, 160] },
+  pomodoro: { title: 'Pomodoro', size: [330, 280] },
+  habits: { title: 'Habits', size: [330, 280] },
+  uptime: { title: 'System Uptime', size: [330, 160] },
+  speedtest: { title: 'Speed Test', size: [330, 180] },
+  calendarEvents: { title: 'Upcoming Events', size: [330, 260] },
 };
 const SIZES = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
 const SIZE_LABELS = { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
@@ -93,6 +98,7 @@ const DEFAULTS = {
   widgetOpacity: 0.9,
   widgetScale: 1,
   search: { apps: true, files: true, folders: true, calc: true, commands: true, web: true, recents: true, maxResults: 8, engine: 'google' },
+  widgetLayout: {},
   widgetOpts: {
     clock: { h24: false, seconds: true, analog: false },
     worldclock: { zones: 'America/New_York,Europe/London,Asia/Tokyo' },
@@ -104,9 +110,9 @@ const DEFAULTS = {
   },
 };
 
-let win, tray, settingsWin, quitting = false;
+let win, tray, settingsWin, desktopWin, quitting = false;
 let items = [];
-const widgetWins = {};
+let openWidgets = new Set();       // widget types currently shown on desktop
 let settings = { usage: {}, widgets: {} };
 let prefs = structuredClone(DEFAULTS);
 
@@ -138,9 +144,10 @@ const state = () => ({
   update: { ...updateInfo, version: app.getVersion(), packaged: app.isPackaged },
   sizes: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, settings.widgets[t]?.size || 'm'])),
   prefs,
-  open: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, !!widgetWins[t]])),
+  open: Object.fromEntries(Object.keys(WIDGETS).map((t) => [t, openWidgets.has(t)])),
   widgets: Object.fromEntries(Object.entries(WIDGETS).map(([k, v]) => [k, v.title])),
   poller: pollerOk,
+  widgetLayout: prefs.widgetLayout || {},
 });
 function broadcastState() {
   const s = state();
@@ -356,29 +363,26 @@ function openSettings(page) {
   });
   settingsWin.setMenu(null);
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: target ? { page: target } : {} });
-  settingsWin.webContents.on('did-finish-load', () => { try { settingsWin.webContents.send('state', state()); } catch { /* window may be closing */ } });
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
-// ---------- widgets ----------
-let desktopFocus = false, peek = false, flashing = false, flashTimer;
+// ---------- widgets (single desktop window) ----------
+let peek = false, flashing = false, flashTimer;
 const topMost = () => prefs.widgetMode === 'top' || peek || flashing;
 const shouldShow = () => topMost() || prefs.widgetMode === 'desktop';
 
 function applyVisibility() {
+  if (!desktopWin || desktopWin.isDestroyed()) return;
   const show = shouldShow();
-  for (const w of Object.values(widgetWins)) {
-    if (w.isDestroyed() || !w.__ready) continue;
-    w.setAlwaysOnTop(topMost());
-    clearTimeout(w.__hide);
-    if (show) {
-      if (!w.isVisible()) w.showInactive();
-      w.webContents.send('vis', true);
-      pinWidget(w);
-    } else if (w.isVisible()) {
-      w.webContents.send('vis', false);
-      w.__hide = setTimeout(() => { if (!w.isDestroyed() && !shouldShow()) w.hide(); }, 260);
-    }
+  desktopWin.setAlwaysOnTop(topMost());
+  clearTimeout(desktopWin.__hide);
+  if (show) {
+    if (!desktopWin.isVisible()) desktopWin.showInactive();
+    desktopWin.webContents.send('vis', true);
+    pinWidget();
+  } else if (desktopWin.isVisible()) {
+    desktopWin.webContents.send('vis', false);
+    desktopWin.__hide = setTimeout(() => { if (!desktopWin.isDestroyed() && !shouldShow()) desktopWin.hide(); }, 260);
   }
 }
 
@@ -389,82 +393,61 @@ function flash(ms) {
   flashTimer = setTimeout(() => { flashing = false; applyVisibility(); }, ms);
 }
 
-function scaleFor(type, w) {
-  const d = w ? screen.getDisplayMatching(w.getBounds()) : screen.getPrimaryDisplay();
-  const auto = prefs.autoScale ? Math.max(0.8, Math.min(1.8, d.workArea.height / 1080)) : 1;
-  return prefs.widgetScale * (SIZES[settings.widgets[type]?.size] || 1) * auto;
+function createDesktopWindow() {
+  const d = screen.getPrimaryDisplay();
+  const wa = d.workArea;
+  desktopWin = new BrowserWindow({
+    x: wa.x, y: wa.y, width: wa.width, height: wa.height,
+    frame: false, transparent: true, resizable: false, skipTaskbar: true, hasShadow: false, show: false,
+    focusable: true, alwaysOnTop: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+  });
+  desktopWin.setIgnoreMouseEvents(true, { forward: true });
+  desktopWin.setMenu(null);
+  desktopWin.loadFile(path.join(__dirname, 'renderer', 'desktop.html'));
+  desktopWin.on('blur', pinAll);
+  desktopWin.once('ready-to-show', () => { desktopWin.__ready = true; applyVisibility(); });
+  desktopWin.on('closed', () => { desktopWin = null; });
 }
-
-function sizeWidget(type, w) {
-  const f = scaleFor(type, w);
-  const [bw, bh] = WIDGETS[type].size;
-  w.setContentSize(Math.round(bw * f), Math.round(bh * f));
-  w.webContents.setZoomFactor(f);
-}
-
-function persistPos(w) {
-  const t = Object.keys(widgetWins).find((k) => widgetWins[k] === w);
-  if (!t || w.isDestroyed()) return;
-  const b = w.getBounds();
-  settings.widgets[t] = { ...settings.widgets[t], x: b.x, y: b.y, open: true };
-  saveSettings();
-  pinAll();
-}
-
-const grid = require('./grid')({ prefs: () => prefs, wins: () => widgetWins, persist: persistPos });
 
 function relayoutAll() {
-  for (const [t, w] of Object.entries(widgetWins)) {
-    if (w.isDestroyed()) continue;
-    sizeWidget(t, w);
-    grid.settle(w);
-  }
+  // Renderer handles relayout via state broadcast
+  broadcastState();
 }
 
 function setWidgetSize(type, key) {
   if (!WIDGETS[type] || !SIZES[key]) return;
   settings.widgets[type] = { ...settings.widgets[type], size: key };
   saveSettings();
-  const w = widgetWins[type];
-  if (!w) { openWidget(type); flash(4000); }
-  else { sizeWidget(type, w); grid.settle(w); w.webContents.send('resized'); }
-  broadcastState();
-}
-
-function openWidget(type) {
-  if (widgetWins[type]) return;
-  const [bw, bh] = WIDGETS[type].size;
-  const saved = settings.widgets[type] || {};
-  const f = scaleFor(type, null);
-  const ww = Math.round(bw * f), wh = Math.round(bh * f);
-  const pos = saved.x !== undefined ? { x: saved.x, y: saved.y } : grid.defaultRect(ww, wh, screen.getPrimaryDisplay());
-  const w = new BrowserWindow({
-    width: ww, height: wh, x: pos.x, y: pos.y,
-    frame: false, transparent: true, resizable: false, skipTaskbar: true, hasShadow: false, show: false,
-    focusable: true, webPreferences: { preload: path.join(__dirname, 'preload.js') },
-  });
-  widgetWins[type] = w;
-  w.loadFile(path.join(__dirname, 'renderer', 'widget.html'), { query: { type } });
-  w.webContents.on('did-finish-load', () => sizeWidget(type, w));
-  w.on('moved', () => persistPos(w));
-  w.on('blur', pinAll);
-  w.once('ready-to-show', () => { w.__ready = true; applyVisibility(); });
-  w.on('closed', () => {
-    delete widgetWins[type];
-    if (!quitting) { settings.widgets[type] = { ...settings.widgets[type], open: false }; saveSettings(); broadcastState(); }
-  });
-  settings.widgets[type] = { ...saved, open: true };
-  saveSettings();
-  broadcastState();
+  if (!openWidgets.has(type)) { toggleWidget(type); }
+  else broadcastState();
 }
 
 function toggleWidget(type) {
   if (!WIDGETS[type]) return;
-  if (widgetWins[type]) widgetWins[type].close();
-  else { openWidget(type); flash(4000); }
+  if (openWidgets.has(type)) {
+    openWidgets.delete(type);
+    settings.widgets[type] = { ...settings.widgets[type], open: false };
+  } else {
+    openWidgets.add(type);
+    settings.widgets[type] = { ...settings.widgets[type], open: true };
+    flash(4000);
+  }
+  saveSettings();
+  broadcastState();
 }
 
-// PowerShell helper: reports the foreground window and pins widgets just above the desktop (below every app).
+function spawnAllWidgets() {
+  for (const t of Object.keys(WIDGETS)) {
+    openWidgets.add(t);
+    settings.widgets[t] = { ...settings.widgets[t], open: true };
+  }
+  saveSettings();
+  flash(4000);
+  broadcastState();
+}
+
+// PowerShell helper: pins the desktop window just above the desktop (below every app).
 const POLL_SCRIPT = `
 Add-Type -TypeDefinition @'
 using System;using System.Text;using System.Threading;using System.Runtime.InteropServices;
@@ -500,14 +483,14 @@ public static void Watch(){
 while(($line=[Console]::In.ReadLine()) -ne $null){ $p=$line.Split(' '); if($p[0] -eq 'pin'){ try{ [FG]::Pin([IntPtr][long]$p[1]) }catch{} } }`;
 let poller = null, pollerOk = false;
 
-function pinWidget(w) {
-  if (!poller || !pollerOk || prefs.widgetMode !== 'desktop' || topMost() || w.isDestroyed() || !w.isVisible()) return;
-  try { poller.stdin.write(`pin ${w.getNativeWindowHandle().readBigUInt64LE(0)}\n`); } catch { /* helper exited */ }
+function pinWidget() {
+  if (!poller || !pollerOk || prefs.widgetMode !== 'desktop' || topMost() || !desktopWin || desktopWin.isDestroyed() || !desktopWin.isVisible()) return;
+  try { poller.stdin.write(`pin ${desktopWin.getNativeWindowHandle().readBigUInt64LE(0)}\n`); } catch { /* helper exited */ }
 }
 let pinTimer;
 function pinAll() {
   clearTimeout(pinTimer);
-  pinTimer = setTimeout(() => Object.values(widgetWins).forEach(pinWidget), 40);
+  pinTimer = setTimeout(() => pinWidget(), 40);
 }
 
 function ensurePoller() {
@@ -551,8 +534,7 @@ function clipTimerSet() {
       lastClip = raw;
       const t = raw.replace(/\0/g, '').replace(/[\uD800-\uDFFF]/g, '');
       clipHistory = [t, ...clipHistory.filter((x) => x !== t)].slice(0, 30);
-      const w = widgetWins.clipboard;
-      if (w && !w.isDestroyed()) w.webContents.send('clip', clipHistory);
+      if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('clip', clipHistory);
     } catch (e) {
       logError(e);
       if (++failures >= 3) clearInterval(clipTimer);
@@ -791,7 +773,10 @@ ipcMain.on('resize', (_e, h) => {
   if (win && win.isVisible()) win.setContentSize(winWidth(), launcherHeight);
 });
 ipcMain.on('hide', () => win.hide());
-ipcMain.on('widget-close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+ipcMain.on('close-widget', (_e, type) => toggleWidget(String(type)));
+ipcMain.on('set-click-through', (_e, ignore) => {
+  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.setIgnoreMouseEvents(!!ignore, { forward: true });
+});
 
 ipcMain.handle('state', () => state());
 ipcMain.handle('startup:get', () => ({ ...startupBatch.getStartupStatus(), packaged: app.isPackaged }));
@@ -836,24 +821,24 @@ ipcMain.handle('net', async () => {
     return x ? { down: Math.max(0, x.rx_sec || 0), up: Math.max(0, x.tx_sec || 0), iface: x.iface } : null;
   } catch { return null; }
 });
-ipcMain.on('drag-start', (e) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) grid.startDrag(w); });
-ipcMain.on('drag-end', () => grid.endDrag(true));
-ipcMain.on('arrange', () => grid.arrange());
+ipcMain.on('drag-start', () => { /* gridstack handles drag internally */ });
+ipcMain.on('drag-end', () => { /* gridstack handles drop internally */ });
+ipcMain.on('arrange', () => { /* renderer handles arrange */ broadcastState(); });
 ipcMain.on('set-size', (_e, t, k) => setWidgetSize(String(t), String(k)));
-ipcMain.on('widget-menu', (e) => {
-  const w = BrowserWindow.fromWebContents(e.sender);
-  const t = Object.keys(widgetWins).find((k) => widgetWins[k] === w);
-  if (!t) return;
+ipcMain.on('widget-menu', (_e, type) => {
+  const t = String(type);
+  if (!WIDGETS[t] || !desktopWin || desktopWin.isDestroyed()) return;
   const cur = settings.widgets[t]?.size || 'm';
   Menu.buildFromTemplate([
     { label: WIDGETS[t].title, enabled: false },
     { type: 'separator' },
     { label: 'Size', submenu: Object.entries(SIZE_LABELS).map(([k, l]) => ({ label: l, type: 'radio', checked: cur === k, click: () => setWidgetSize(t, k) })) },
-    { label: 'Auto-arrange widgets', click: () => grid.arrange() },
+    { label: 'Auto-arrange widgets', click: () => desktopWin.webContents.send('arrange') },
+    { label: 'Show all widgets', click: spawnAllWidgets },
     { label: 'Widget settings...', click: openSettings },
     { type: 'separator' },
-    { label: 'Close widget', click: () => w.close() },
-  ]).popup({ window: w });
+    { label: 'Close widget', click: () => toggleWidget(t) },
+  ]).popup({ window: desktopWin });
 });
 ipcMain.handle('disks', () => {
   const out = [];
@@ -875,7 +860,7 @@ ipcMain.handle('clip-get', () => clipHistory);
 ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(clipHistory[i]); });
 ipcMain.on('clip-clear', () => {
   clipHistory = [];
-  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send('clip', clipHistory);
+  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('clip', clipHistory);
 });
 
 ipcMain.handle('logs:read', () => {
@@ -970,7 +955,7 @@ function createTray() {
     ...(updateReady ? [{ label: `Restart to update to ${updateReady}`, click: () => { quitting = true; autoUpdater.quitAndInstall(false, true); } }] : []),
     { type: 'separator' },
     { label: 'Peek widgets on top', type: 'checkbox', checked: peek, click: () => { peek = !peek; applyVisibility(); } },
-    { label: 'Widgets', submenu: Object.keys(WIDGETS).map((t) => ({ label: WIDGETS[t].title, type: 'checkbox', checked: !!widgetWins[t], click: () => toggleWidget(t) })) },
+    { label: 'Widgets', submenu: [...Object.keys(WIDGETS).map((t) => ({ label: WIDGETS[t].title, type: 'checkbox', checked: openWidgets.has(t), click: () => toggleWidget(t) })), { type: 'separator' }, { label: 'Show all widgets', click: spawnAllWidgets }] },
     { type: 'separator' },
     { label: 'Launch at login', type: 'checkbox', checked: prefs.launchAtLogin, click: (i) => setPref('launchAtLogin', i.checked) },
     { label: 'Rebuild index', click: startIndex },
@@ -995,6 +980,7 @@ app.whenReady().then(() => {
   loadSettings();
   nativeTheme.themeSource = prefs.theme;
   createWindow();
+  createDesktopWindow();
   createTray();
   screen.on('display-metrics-changed', relayoutAll);
   screen.on('display-removed', relayoutAll);
@@ -1012,7 +998,9 @@ app.whenReady().then(() => {
   setInterval(startIndex, 10 * 60 * 1000);
   clipTimerSet();
   ensurePoller();
-  for (const t of Object.keys(WIDGETS)) if (settings.widgets[t]?.open) openWidget(t);
+  // Restore open widgets
+  for (const t of Object.keys(WIDGETS)) if (settings.widgets[t]?.open) openWidgets.add(t);
+  broadcastState();
 });
 
 app.on('before-quit', () => { quitting = true; });

@@ -1,0 +1,65 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 0 !important;
+}
+
+body.hidden #grid { opacity: 0; pointer-events: none; }
+#grid { transition: opacity 0.26s ease; pointer-events: none; width: 100vw; height: 100vh; }
+
+/* Gridstack overrides — widgets are the interactive layer */
+.grid-stack-item { pointer-events: auto; }
+.grid-stack-item-content {
+  inset: 0 !important;
+  overflow: visible !important;
+  transition: none !important;
+}
+
+/* Drop placeholder — subtle glow */
+.grid-stack-placeholder > .placeholder-content {
+  background: rgba(var(--accent-rgb, 99,102,241), 0.08) !important;
+  border: 1.5px dashed rgba(var(--accent-rgb, 99,102,241), 0.35) !important;
+  border-radius: var(--radius, 16px) !important;
+  margin: 0 !important;
+}
+
+/* Resize handles */
+.ui-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.grid-stack-item:hover > .ui-resizable-handle { opacity: 1; }
+.ui-resizable-se, .ui-resizable-e, .ui-resizable-s, .ui-resizable-sw, .ui-resizable-w {
+  background: rgba(255,255,255,0.2) !important;
+  border-radius: 3px !important;
+  width: 8px !important;
+  height: 8px !important;
+  border: none !important;
+}
+.ui-resizable-se { right: 2px !important; bottom: 2px !important; cursor: nwse-resize !important; }
+.ui-resizable-e { right: 2px !important; top: 50% !important; transform: translateY(-50%); cursor: ew-resize !important; }
+.ui-resizable-s { bottom: 2px !important; left: 50% !important; transform: translateX(-50%); cursor: ns-resize !important; }
+.ui-resizable-w { left: 2px !important; top: 50% !important; transform: translateY(-50%); cursor: ew-resize !important; }
+.ui-resizable-sw { left: 2px !important; bottom: 2px !important; cursor: nesw-resize !important; }
+
+/* Drag ghost styling */
+.grid-stack-item.dragging > .grid-stack-item-content {
+  opacity: 0.85;
+  transform: scale(1.02);
+  transition: none;
+}
+
+/* Ensure widget card fills the grid item */
+.grid-stack-item .card {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+}

@@ -232,3 +232,20 @@ body.noshadow .card { box-shadow: none; }
 .cdl { font-size: 14px; font-weight: 500; margin-top: 4px; }
 .qt { flex: 1; display: flex; align-items: center; font: 300 20px/1.3 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
 .qa { font-size: 12px; margin-top: 6px; }
+
+/* pomodoro */
+.w-pomodoro .ringwrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+.w-pomodoro .fg { stroke: var(--red, #ff453a); }
+.w-pomodoro .fg.o { stroke: var(--red, #ff453a); }
+
+/* habits */
+.w-habits .todo small { font-size: 10px; }
+
+/* uptime */
+.w-uptime .time { font: 300 42px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+
+/* speedtest */
+.w-speedtest .time { font: 300 36px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+
+/* calendarEvents */
+.w-calendarEvents .rows { flex: 1; overflow-y: auto; }

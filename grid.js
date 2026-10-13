@@ -4,13 +4,11 @@ const GAP = 16;
 const MARGIN_RIGHT = 24;
 const MARGIN_TOP = 24;
 const BASE_COL_WIDTH = 330;
-const BASE_ROW_HEIGHT = 160;
 
 function hit(a, b, pad = 6) {
   return a.x < b.x + b.width + pad && a.x + a.width + pad > b.x && a.y < b.y + b.height + pad && a.y + a.height + pad > b.y;
 }
 
-// Overshoot-and-settle easing — gives widgets a springy, bubble-like bounce.
 function springEase(t) {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
@@ -24,6 +22,7 @@ module.exports = ({ prefs, wins, persist }) => {
   const typeOf = (w) => Object.keys(wins()).find((t) => wins()[t] === w);
   const getScale = () => prefs().widgetScale || 1;
   const getGap = () => Math.round(GAP * getScale());
+  const getColW = () => Math.round(BASE_COL_WIDTH * getScale());
 
   function clampToScreen(r, d) {
     const wa = d.workArea;
@@ -34,24 +33,12 @@ module.exports = ({ prefs, wins, persist }) => {
     };
   }
 
-  // Active widget bounds excluding a given window.
   function otherBounds(excludeW) {
     return Object.values(wins())
       .filter((w) => w !== excludeW && !w.isDestroyed() && w.isVisible())
       .map((w) => w.getBounds());
   }
 
-  // Compute effective column width from the widest visible widget + grid setting.
-  function effColW() {
-    const s = getScale();
-    const base = Math.round(BASE_COL_WIDTH * s);
-    const widest = Math.max(0, ...Object.values(wins())
-      .filter((w) => !w.isDestroyed() && w.isVisible())
-      .map((w) => w.getBounds().width));
-    return Math.max(base, widest);
-  }
-
-  // Column X positions for right/left anchored layout, given column width.
   function colX(idx, cw, d) {
     const wa = d.workArea;
     const anchor = prefs().arrangeAnchor || 'top-right';
@@ -61,19 +48,14 @@ module.exports = ({ prefs, wins, persist }) => {
     return wa.x + wa.width - (idx + 1) * cw - idx * getGap() - MARGIN_RIGHT;
   }
 
-  // Snap a rect: X to nearest column (sized by actual widest widget),
-  // Y flush against neighbours in that column with uniform gap.
+  // Snap X to nearest column, Y flush against column neighbours.
   function snap(r, d, excludeW) {
     const wa = d.workArea;
-    const cw = effColW();
+    const cw = getColW();
     const gap = getGap();
-    const anchor = prefs().arrangeAnchor || 'top-right';
-    const isRight = anchor.includes('right');
 
-    // Find nearest column based on this widget's ACTUAL width
-    let bestCol = 0;
-    let bestDist = Infinity;
-    const maxCols = Math.ceil((wa.width - 48) / (cw + gap)) + 2;
+    let bestCol = 0, bestDist = Infinity;
+    const maxCols = Math.ceil(wa.width / (cw + gap)) + 2;
     for (let c = 0; c <= maxCols; c++) {
       const x = colX(c, cw, d);
       if (x < wa.x - cw || x > wa.x + wa.width) continue;
@@ -82,23 +64,24 @@ module.exports = ({ prefs, wins, persist }) => {
     }
     const targetX = colX(bestCol, cw, d);
 
-    // Y: collect flush candidates from neighbours in this column's horizontal span
+    // Find vertical slots: top of screen, below each widget in this column
     const colL = targetX;
-    const colR = targetX + r.width;
-    const candidates = [wa.y + MARGIN_TOP];
-
+    const colR = targetX + cw;
+    const cands = [wa.y + MARGIN_TOP];
     for (const ob of otherBounds(excludeW)) {
       if (ob.x < colR && ob.x + ob.width > colL) {
-        candidates.push(ob.y + ob.height + gap);
-        candidates.push(ob.y - gap - r.height);
+        cands.push(ob.y + ob.height + gap);
+        cands.push(ob.y - gap - r.height);
       }
     }
 
-    let targetY = wa.y + MARGIN_TOP;
-    let bestY = Infinity;
-    for (const y of candidates) {
-      const dist = Math.abs(y - r.y);
-      if (dist < bestY) { bestY = dist; targetY = y; }
+    let targetY = wa.y + MARGIN_TOP, bestY = Infinity;
+    for (const y of cands) {
+      const yy = Math.round(y);
+      const cand = { ...r, x: targetX, y: yy };
+      if (otherBounds(excludeW).some((ob) => hit(cand, ob, 4))) continue;
+      const dist = Math.abs(yy - r.y);
+      if (dist < bestY) { bestY = dist; targetY = yy; }
     }
 
     return clampToScreen({ ...r, x: targetX, y: targetY }, d);
@@ -106,7 +89,6 @@ module.exports = ({ prefs, wins, persist }) => {
 
   const place = (r, d, excludeW) => (prefs().snapToGrid ? snap(r, d, excludeW) : clampToScreen(r, d));
 
-  // Spring animation with overshoot — widgets bounce into place like bubbles.
   function animateTo(w, to, ms = 340, delay = 0) {
     if (!w || w.isDestroyed()) return;
     clearInterval(w.__anim);
@@ -131,68 +113,52 @@ module.exports = ({ prefs, wins, persist }) => {
     }, delay);
   }
 
-  // Find nearest free position for a rect, pushing flush against occupied bounds.
-  // direction: preferred push direction ('up','down','left','right') or null for nearest.
+  // Find nearest free column-slot for a rect of uniform column width.
   function findFree(rect, d, occupied, direction) {
     const wa = d.workArea;
+    const cw = getColW();
     const gap = getGap();
-    const cw = effColW();
     const free = (r) => !occupied.some((o) => hit(r, o, 4));
 
-    // Candidate generator: flush positions relative to each occupied rect + screen top
+    const maxCols = Math.ceil(wa.width / (cw + gap)) + 2;
     const cands = [];
-    const push = (x, y) => {
-      const r = clampToScreen({ ...rect, x, y }, d);
-      if (free(r)) cands.push(r);
-    };
 
-    // Same-column flush positions
-    for (const ob of occupied) {
-      push(rect.x, ob.y + ob.height + gap);
-      push(rect.x, ob.y - gap - rect.height);
-    }
-    push(rect.x, wa.y + MARGIN_TOP);
-
-    // Adjacent columns (both directions)
-    for (let dc = -4; dc <= 4; dc++) {
-      if (dc === 0) continue;
-      const nx = rect.x + dc * (cw + gap);
-      if (nx < wa.x - rect.width || nx > wa.x + wa.width) continue;
-      push(nx, wa.y + MARGIN_TOP);
+    for (let c = 0; c <= maxCols; c++) {
+      const x = colX(c, cw, d);
+      if (x + cw < wa.x || x > wa.x + wa.width) continue;
+      const tryY = (y) => {
+        const r = clampToScreen({ ...rect, x, y: Math.round(y) }, d);
+        if (free(r)) cands.push(r);
+      };
+      tryY(wa.y + MARGIN_TOP);
       for (const ob of occupied) {
-        push(nx, ob.y + ob.height + gap);
-        push(nx, ob.y - gap - rect.height);
+        if (ob.x < x + cw && ob.x + ob.width > x) {
+          tryY(ob.y + ob.height + gap);
+          tryY(ob.y - gap - rect.height);
+        }
       }
     }
 
-    // Score: prefer direction match, then distance from original position
+    if (!cands.length) return null;
     cands.sort((a, b) => {
-      let sa = 0, sb = 0;
-      if (direction === 'down') { sa = a.y - rect.y; sb = b.y - rect.y; }
-      else if (direction === 'up') { sa = rect.y - a.y; sb = rect.y - b.y; }
-      else if (direction === 'right') { sa = a.x - rect.x; sb = b.x - rect.x; }
-      else if (direction === 'left') { sa = rect.x - a.x; sb = rect.x - b.x; }
-      else { sa = 0; sb = 0; }
-      // Penalize going opposite to preferred direction
-      if (direction === 'down' && a.y < rect.y) sa -= 10000;
-      if (direction === 'down' && b.y < rect.y) sb -= 10000;
-      if (direction === 'up' && a.y > rect.y) sa -= 10000;
-      if (direction === 'up' && b.y > rect.y) sb -= 10000;
-      if (direction === 'right' && a.x < rect.x) sa -= 10000;
-      if (direction === 'right' && b.x < rect.x) sb -= 10000;
-      if (direction === 'left' && a.x > rect.x) sa -= 10000;
-      if (direction === 'left' && b.x > rect.x) sb -= 10000;
-      // Closer is better as tiebreaker
-      const da = Math.abs(a.y - rect.y) + Math.abs(a.x - rect.x);
-      const db = Math.abs(b.y - rect.y) + Math.abs(b.x - rect.x);
-      if (direction) return (sb - sb * 0) - (sa - sa * 0) || da - db;
-      return da - db;
+      const score = (r) => {
+        let s = 0;
+        if (direction === 'down') s += r.y - rect.y;
+        else if (direction === 'up') s += rect.y - r.y;
+        else if (direction === 'right') s += r.x - rect.x;
+        else if (direction === 'left') s += rect.x - r.x;
+        if (direction === 'down' && r.y < rect.y) s -= 10000;
+        if (direction === 'up' && r.y > rect.y) s -= 10000;
+        if (direction === 'right' && r.x < rect.x) s -= 10000;
+        if (direction === 'left' && r.x > rect.x) s -= 10000;
+        s -= Math.abs(r.y - rect.y) * 0.7 + Math.abs(r.x - rect.x) * 0.3;
+        return s;
+      };
+      return score(b) - score(a);
     });
-
-    return cands[0] || null;
+    return cands[0];
   }
 
-  // Determine push direction: away from where the dropped widget came from.
   function pushDirection(droppedRect, otherRect) {
     const dcx = (droppedRect.x + droppedRect.width / 2) - (otherRect.x + otherRect.width / 2);
     const dcy = (droppedRect.y + droppedRect.height / 2) - (otherRect.y + otherRect.height / 2);
@@ -200,12 +166,12 @@ module.exports = ({ prefs, wins, persist }) => {
     return dcx > 0 ? 'left' : 'right';
   }
 
-  // Pack all widgets into columns based on ACTUAL bounds, no overlaps.
-  // dropped: optional { w, rect } — pin that widget at rect and flow others around it.
+  // Pack widgets into columns. All same width → trivially aligned.
   function arrange(targetDisplay, dropped) {
     const d = targetDisplay || screen.getPrimaryDisplay();
     const wa = d.workArea;
     const gap = getGap();
+    const cw = getColW();
     const anchor = prefs().arrangeAnchor || 'top-right';
     const isBottom = anchor.includes('bottom');
     const isCenter = anchor === 'center';
@@ -213,9 +179,6 @@ module.exports = ({ prefs, wins, persist }) => {
     const activeWins = Object.values(wins()).filter((w) => !w.isDestroyed() && w.isVisible());
     if (!activeWins.length) return;
 
-    const cw = effColW();
-
-    // If a widget was just dropped, separate it and let it hold its position
     let pinned = null;
     let flowWins = [...activeWins];
     if (dropped && !dropped.w.isDestroyed()) {
@@ -223,10 +186,9 @@ module.exports = ({ prefs, wins, persist }) => {
       flowWins = flowWins.filter((w) => w !== dropped.w);
     }
 
-    // Sort remaining by height descending (tall widgets anchor columns)
     flowWins.sort((a, b) => b.getBounds().height - a.getBounds().height);
 
-    const columns = []; // { x, cursorY }
+    const columns = [];
     const getCol = (i) => {
       while (columns.length <= i) {
         columns.push({ x: colX(columns.length, cw, d), cursorY: wa.y + MARGIN_TOP });
@@ -236,60 +198,47 @@ module.exports = ({ prefs, wins, persist }) => {
 
     const placements = [];
 
-    // Place pinned widget first — mark its column as occupied
     if (pinned) {
       const pr = pinned.rect;
-      // Find which column it's in
-      let pc = 0;
-      let pdist = Infinity;
+      let pc = 0, pdist = Infinity;
       for (let c = 0; c < 20; c++) {
-        const x = colX(c, cw, d);
-        const dist = Math.abs(x - pr.x);
+        const dist = Math.abs(colX(c, cw, d) - pr.x);
         if (dist < pdist) { pdist = dist; pc = c; }
       }
       const col = getCol(pc);
       col.cursorY = Math.max(col.cursorY, pr.y + pr.height + gap);
-      placements.push({ w: pinned.w, x: pr.x, y: pr.y, w2: pr.width, h2: pr.height });
+      placements.push({ w: pinned.w, x: colX(pc, cw, d), y: pr.y });
     }
 
-    // Flow remaining widgets into columns
     let curCol = 0;
     for (const w of flowWins) {
       const b = w.getBounds();
       let col = getCol(curCol);
-
       if (col.cursorY + b.height > wa.y + wa.height - 24 && col.cursorY > wa.y + MARGIN_TOP + 1) {
         curCol++;
         col = getCol(curCol);
       }
-
-      let tx = col.x;
       let ty = col.cursorY;
-      if (isBottom) {
-        ty = wa.y + wa.height - b.height - (col.cursorY - wa.y);
-      }
-      placements.push({ w, x: tx, y: ty, w2: b.width, h2: b.height });
+      if (isBottom) ty = wa.y + wa.height - b.height - (col.cursorY - wa.y);
+      placements.push({ w, x: col.x, y: ty });
       col.cursorY = Math.max(col.cursorY, ty + b.height + gap);
     }
 
-    // Center: shift block
     if (isCenter && columns.length > 0) {
       const totalW = columns.length * cw + (columns.length - 1) * gap;
       const offset = Math.round((wa.width - totalW) / 2);
       placements.forEach((p) => { p.x += offset; });
     }
 
-    // Animate with staggered delays for a cascading bubble feel
     placements.forEach((p, i) => {
-      animateTo(p.w, clampToScreen({ x: p.x, y: p.y, width: p.w2, height: p.h2 }, d), 340, i * 40);
+      const w = p.w;
+      const b = w.getBounds();
+      animateTo(w, clampToScreen({ x: p.x, y: p.y, width: b.width, height: b.height }, d), 340, i * 40);
     });
   }
 
-  function repack() {
-    arrange();
-  }
+  function repack() { arrange(); }
 
-  // Settle after drop: snap the dropped widget, then push overlapping ones away.
   function settle(w) {
     const t = typeOf(w);
     if (!t || w.isDestroyed()) return;
@@ -297,54 +246,51 @@ module.exports = ({ prefs, wins, persist }) => {
     const d = screen.getDisplayMatching(cur);
     const r = place(cur, d, w);
 
-    if (!prefs().gridCollisions) { animateTo(w, r); return; }
-
-    // Animate dropped widget to its snapped position
     animateTo(w, r);
+
+    if (!prefs().gridCollisions) return;
 
     const allWins = Object.entries(wins()).filter(([, x]) => !x.isDestroyed() && x.isVisible());
 
-    // For each other widget that overlaps the dropped target, push it away
+    // Push overlapping widgets away from the dropped one
+    const pushes = [];
     for (const [k, ow] of allWins) {
       if (k === t) continue;
       const ob = ow.getBounds();
       if (!hit(r, ob, 6)) continue;
-
       const dir = pushDirection(r, ob);
       const occupied = allWins
         .filter(([k2, x2]) => k2 !== k)
         .map(([, x2]) => x2.getBounds())
         .concat([r]);
       const target = findFree(ob, d, occupied, dir);
-      if (target) animateTo(ow, target, 300, 60);
+      if (target) pushes.push({ ow, target });
     }
+    pushes.forEach(({ ow, target }, i) => animateTo(ow, target, 300, 60 + i * 40));
 
-    // Chain resolution: if dropped widget still overlaps after pushes, nudge it
+    // Chain: after pushes settle, ensure no residual overlap
     setTimeout(() => {
       if (w.isDestroyed()) return;
-      const actual = w.getBounds();
       const others = otherBounds(w);
-      if (others.some((ob) => hit(actual, ob, 6))) {
-        const target = findFree(actual, d, others, null);
+      if (others.some((ob) => hit(w.getBounds(), ob, 6))) {
+        const target = findFree(w.getBounds(), d, others, null);
         if (target) animateTo(w, target, 300);
       }
-    }, 380);
+    }, 400);
   }
 
   function defaultRect(width, height, d) {
     const wa = d.workArea;
-    const cw = effColW();
+    const cw = getColW();
     const gap = getGap();
     const active = otherBounds(null);
 
-    let curCol = 0;
-    let curY = wa.y + MARGIN_TOP;
+    let curCol = 0, curY = wa.y + MARGIN_TOP;
     for (;;) {
       const x = colX(curCol, cw, d);
       const cand = { x, y: curY, width, height };
       if (curY + height > wa.y + wa.height - 20) {
-        curCol++;
-        curY = wa.y + MARGIN_TOP;
+        curCol++; curY = wa.y + MARGIN_TOP;
         if (curCol > 8) return clampToScreen(cand, d);
         continue;
       }
@@ -357,11 +303,10 @@ module.exports = ({ prefs, wins, persist }) => {
     if (overlayWin || !prefs().snapToGrid) return;
     const wa = d.workArea;
     const s = getScale();
-    const cw = effColW();
+    const cw = getColW();
     const gap = getGap();
-    const rowH = Math.round(BASE_ROW_HEIGHT * s);
+    const rowH = Math.round(160 * s);
     const anchor = prefs().arrangeAnchor || 'top-right';
-    const isRight = anchor.includes('right');
     const originY = wa.y + MARGIN_TOP;
 
     overlayWin = new BrowserWindow({
@@ -373,7 +318,7 @@ module.exports = ({ prefs, wins, persist }) => {
 
     let linesHtml = '';
     let dotsHtml = '';
-    const maxCols = Math.ceil((wa.width - 48) / (cw + gap)) + 2;
+    const maxCols = Math.ceil(wa.width / (cw + gap)) + 2;
     for (let c = 0; c <= maxCols; c++) {
       const x = colX(c, cw, d) - Math.round(gap / 2);
       if (x <= wa.x + 4 || x >= wa.x + wa.width - 4) continue;
