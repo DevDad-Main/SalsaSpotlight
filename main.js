@@ -217,6 +217,7 @@ function commandList(q = '') {
     { id: 'peek', title: 'Peek widgets', sub: 'Show or hide widgets on top', kw: 'widgets show hide peek floating overlay' },
     { id: 'spawn', title: 'Show all widgets', sub: 'Open every widget at once', kw: 'all widgets show open enable everything' },
     { id: 'hideall', title: 'Hide all widgets', sub: 'Close every widget', kw: 'all widgets hide close disable clear' },
+    { id: 'resetlayout', title: 'Reset widget layout', sub: 'Clear positions and re-arrange from scratch', kw: 'reset layout clear positions arrange tidy clean restart fresh' },
     ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title}`, sub: 'Floating widget', kw: `widget toggle ${t} ${w.title.toLowerCase()}` })),
     ...(/size|small|medium|large|big|tiny/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: `resize size widget ${t}` }))) : []),
     { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh rescan index rebuild' },
@@ -425,7 +426,12 @@ function openSettings(page) {
 // ---------- widgets (single desktop window) ----------
 let peek = false, flashing = false, flashTimer;
 const topMost = () => prefs.widgetMode === 'top' || peek || flashing;
-const shouldShow = () => topMost() || prefs.widgetMode === 'desktop';
+const shouldShow = () => {
+  if (prefs.widgetMode === 'peek') return peek || flashing;
+  if (prefs.widgetMode === 'top') return true;
+  // desktop mode: peek toggles visibility
+  return !peek || flashing;
+};
 
 function applyVisibility() {
   if (!desktopWin || desktopWin.isDestroyed()) return;
@@ -784,6 +790,7 @@ function runCommand(id) {
     case 'quit': app.quit(); break;
     case 'spawn': spawnAllWidgets(); break;
     case 'hideall': hideAllWidgets(); break;
+    case 'resetlayout': prefs.widgetLayout = {}; saveSettings(); broadcastState(); if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('arrange'); break;
     default:
       if (id.startsWith('size-')) { const [, t, k] = id.split('-'); setWidgetSize(t, k); }
       else if (id.startsWith('w-')) toggleWidget(id.slice(2));

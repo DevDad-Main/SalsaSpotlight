@@ -372,6 +372,7 @@ function widgetPage() {
     { type: 'button', label: 'Show all widgets', desc: 'Open every widget at once', btn: 'Show All', action: () => { Object.keys(state.widgets).forEach((t) => { if (!state.open[t]) window.api.toggleWidget(t); }); } },
     { type: 'button', label: 'Hide all widgets', desc: 'Close every widget', btn: 'Hide All', action: () => { Object.keys(state.widgets).forEach((t) => { if (state.open[t]) window.api.toggleWidget(t); }); } },
     { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid according to size and priority', btn: 'Arrange Now', action: () => window.api.arrange() },
+    { type: 'button', label: 'Reset widget layout', desc: 'Clear saved positions and re-arrange from scratch', btn: 'Reset Layout', action: () => { window.api.setSetting('widgetLayout', {}); setTimeout(() => window.api.arrange(), 200); } },
   ], 45));
   const h2 = document.createElement('h2');
   h2.textContent = 'Your widgets (right-click a widget to resize it)';

@@ -90,6 +90,13 @@
     const item = createGridItem(type);
     gridEl.appendChild(item);
     grid.makeWidget(item);
+    // Ensure proper size after placement (fixes tiny-square race condition)
+    const h = DEFAULT_H[type] || 4;
+    requestAnimationFrame(() => {
+      if (!instances[type]) return;
+      const cur = parseInt(item.getAttribute('gs-h') || 0);
+      if (cur < 2) grid.update(item, { h, w: 1 }, false);
+    });
     instances[type].inst.mount(state.prefs.widgetOpts[type], state.prefs);
   }
 
