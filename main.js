@@ -40,7 +40,7 @@ process.on('unhandledRejection', logError);
 const WIDTH = 700;
 // Standard macOS-style modular widths (330px standard column width)
 const WIDGETS = {
-  clock: { title: 'Clock', size: [330, 160] },
+  clock: { title: 'Clock', size: [330, 195] },
   worldclock: { title: 'World Clock', size: [330, 240] },
   weather: { title: 'Weather', size: [330, 270] },
   system: { title: 'System Monitor', size: [330, 340] },
@@ -89,7 +89,7 @@ const DEFAULTS = {
   tint: 0.45,
   animations: true,
   clipboard: true,
-  widgetMode: 'top',
+  widgetMode: 'desktop',
   widgetOpacity: 0.9,
   widgetScale: 1,
   search: { apps: true, files: true, folders: true, calc: true, commands: true, web: true, recents: true, maxResults: 8, engine: 'google' },
@@ -124,7 +124,7 @@ function loadSettings() {
     const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
     settings = { usage: raw.usage || {}, widgets: raw.widgets || {} };
     if (raw.prefs) merge(prefs, raw.prefs);
-    if (raw.prefs?.v !== 2) prefs.widgetMode = 'top';
+    if (raw.prefs?.v !== 2) prefs.widgetMode = 'desktop';
   } catch { /* first run */ }
   prefs.launchAtLogin = app.getLoginItemSettings().openAtLogin;
 }
@@ -356,13 +356,14 @@ function openSettings(page) {
   });
   settingsWin.setMenu(null);
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: target ? { page: target } : {} });
+  settingsWin.webContents.on('did-finish-load', () => { try { settingsWin.webContents.send('state', state()); } catch { /* window may be closing */ } });
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
 // ---------- widgets ----------
 let desktopFocus = false, peek = false, flashing = false, flashTimer;
 const topMost = () => prefs.widgetMode === 'top' || peek || flashing;
-const shouldShow = () => topMost() || (prefs.widgetMode === 'desktop' && pollerOk);
+const shouldShow = () => topMost() || prefs.widgetMode === 'desktop';
 
 function applyVisibility() {
   const show = shouldShow();
@@ -894,17 +895,27 @@ ipcMain.on('logs:open-folder', () => {
 });
 
 // ---------- auto-update (GitHub releases) ----------
-let manualCheck = false;
+let manualCheck = false, updateCheckTimer = null;
 const notify = (title, body) => new Notification({ title, body }).show();
-const setUpdate = (patch) => { Object.assign(updateInfo, patch); broadcastState(); };
+const setUpdate = (patch) => { try { Object.assign(updateInfo, patch); broadcastState(); } catch { /* never let update UI break the app */ } };
 const errText = (e) => String(e?.message || e).split('\n')[0];
+const safeUpdateEvent = (fn) => (...args) => { try { fn(...args); } catch (e) { logError(e); } };
 
 function checkUpdates(manual) {
   manualCheck = manual;
   if (!app.isPackaged) { setUpdate({ status: 'dev' }); return; }
   if (updateReady) { setUpdate({ status: 'ready', latest: updateReady }); return; }
   setUpdate({ status: 'checking', error: '', percent: 0 });
-  autoUpdater.checkForUpdates().catch((e) => { logError(e); setUpdate({ status: 'error', error: errText(e) }); });
+  clearTimeout(updateCheckTimer);
+  // Timeout: if checkForUpdates hangs (slow/blocked network on GFN), give up after 30s
+  updateCheckTimer = setTimeout(() => {
+    if (updateInfo.status === 'checking') setUpdate({ status: 'error', error: 'Update check timed out' });
+  }, 30000);
+  autoUpdater.checkForUpdates().catch((e) => {
+    clearTimeout(updateCheckTimer);
+    logError(e);
+    setUpdate({ status: 'error', error: errText(e) });
+  });
 }
 
 function installUpdate() {
@@ -917,16 +928,18 @@ function setupUpdates() {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('error', (e) => { logError(e); setUpdate({ status: 'error', error: errText(e) }); });
-  autoUpdater.on('update-not-available', () => setUpdate({ status: 'uptodate', checkedAt: Date.now() }));
-  autoUpdater.on('update-available', (info) => setUpdate({ status: 'downloading', latest: info.version, percent: 0 }));
-  autoUpdater.on('download-progress', (p) => setUpdate({ status: 'downloading', percent: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', (info) => {
+  autoUpdater.on('error', safeUpdateEvent((e) => { logError(e); clearTimeout(updateCheckTimer); setUpdate({ status: 'error', error: errText(e) }); }));
+  autoUpdater.on('update-not-available', safeUpdateEvent(() => { clearTimeout(updateCheckTimer); setUpdate({ status: 'uptodate', checkedAt: Date.now() }); }));
+  autoUpdater.on('update-available', safeUpdateEvent((info) => setUpdate({ status: 'downloading', latest: info.version, percent: 0 })));
+  autoUpdater.on('download-progress', safeUpdateEvent((p) => setUpdate({ status: 'downloading', percent: Math.round(p.percent) })));
+  autoUpdater.on('update-downloaded', safeUpdateEvent((info) => {
+    clearTimeout(updateCheckTimer);
     updateReady = info.version;
     setUpdate({ status: 'ready', latest: info.version, percent: 100 });
     if (!manualCheck) notify('Update ready', `SalsaSpotlight ${info.version} installs when you quit. Open Settings > Updates to restart now.`);
-  });
-  checkUpdates(false);
+  }));
+  // Delay the first check so the app is fully stable before touching the network
+  setTimeout(() => checkUpdates(false), 20000);
   setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
 }
 

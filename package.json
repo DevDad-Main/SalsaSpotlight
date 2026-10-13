@@ -1,6 +1,6 @@
 {
   "name": "spotlight-win",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Spotlight-style launcher and floating desktop widgets for Windows 11",
   "main": "main.js",
   "author": "DevDad-Main",
@@ -49,7 +49,8 @@
       ],
       "artifactName": "${productName}-${version}-${arch}-Setup.${ext}",
       "requestedExecutionLevel": "asInvoker",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -62,9 +63,3 @@
     }
   }
 }
-
-
-
-
-
-

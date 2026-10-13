@@ -1,6 +1,6 @@
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
-let state = null, page = 'general', controls = [];
+let state = null, page = 'general', controls = [], stateReady = false;
 
 const SWATCHES = ['#8b95ff', '#58b6ff', '#3ed6c0', '#5fd4a0', '#ffb35c', '#ff7a90', '#c084fc'];
 const KEYS = [['Alt+Space', 'Alt + Space'], ['Ctrl+Space', 'Ctrl + Space'], ['Ctrl+Alt+Space', 'Ctrl + Alt + Space'], ['Ctrl+Shift+Space', 'Ctrl + Shift + Space'], ['Alt+Shift+Space', 'Alt + Shift + Space'], ['Ctrl+Alt+S', 'Ctrl + Alt + S']];
@@ -90,6 +90,12 @@ function lucide(name, size = 16) {
     widgets: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
     updates: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
     logs: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12h4"/><path d="M10 16h4"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+    refresh: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M21 21v-5h-5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>',
+    checkCircle: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>',
+    wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    loader: '<line x1="12" x2="12" y1="2" y2="6"/><line x1="12" x2="12" y1="18" y2="22"/><line x1="4.93" x2="7.76" y1="4.93" y2="7.76"/><line x1="16.24" x2="19.07" y1="16.24" y2="19.07"/><line x1="2" x2="6" y1="12" y2="12"/><line x1="18" x2="22" y1="12" y2="12"/><line x1="4.93" x2="7.76" y1="19.07" y2="16.24"/><line x1="16.24" x2="19.07" y1="7.76" y2="4.93"/>',
   };
   const body = I[name] || I.settings;
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle">${body}</svg>`;
@@ -261,13 +267,13 @@ function updateUI() {
   if (!t) return;
   const u = state.update;
   const M = {
-    idle: ['⬆️', `Version ${u.version}`, 'Press "Check for updates" to look for a newer version.'],
-    checking: ['🔄', 'Checking for updates...', `Current version ${u.version}`],
-    downloading: ['⬇️', `Downloading version ${u.latest || ''}`, `${u.percent}% complete`],
-    ready: ['✅', `Version ${u.latest} is ready`, 'Restart to install it now. It also installs when you quit.'],
-    uptodate: ['👍', 'You are up to date', `SalsaSpotlight ${u.version} is the latest version.`],
-    error: ['⚠️', 'Could not check for updates', u.error || 'Check your internet connection and try again.'],
-    dev: ['🛠️', 'Updates work in the installed app', `Running from source (${u.version}).`],
+    idle: [lucide('download', 20), `Version ${u.version}`, 'Press "Check for updates" to look for a newer version.'],
+    checking: [lucide('refresh', 20), 'Checking for updates...', `Current version ${u.version}`],
+    downloading: [lucide('download', 20), `Downloading version ${u.latest || ''}`, `${u.percent}% complete`],
+    ready: [lucide('checkCircle', 20), `Version ${u.latest} is ready`, 'Restart to install it now. It also installs when you quit.'],
+    uptodate: [lucide('checkCircle', 20), 'You are up to date', `SalsaSpotlight ${u.version} is the latest version.`],
+    error: [lucide('alert', 20), 'Could not check for updates', u.error || 'Check your internet connection and try again.'],
+    dev: [lucide('wrench', 20), 'Updates work in the installed app', `Running from source (${u.version}).`],
   };
   const [icon, title, sub] = M[u.status] || M.idle;
   document.getElementById('ui').textContent = icon;
@@ -401,8 +407,10 @@ function refresh() {
 }
 
 function init(s) {
+  if (!s || !s.prefs) return;
   const first = !state;
   state = s;
+  stateReady = true;
   if (first) {
     const all = { ...PAGES, widgets: { title: 'Widgets', icon: 'widgets' }, updates: { title: 'Updates', icon: 'updates' }, logs: { title: 'Logs', icon: 'logs' } };
     const want = new URLSearchParams(location.search).get('page');
@@ -418,6 +426,25 @@ function init(s) {
   } else refresh();
 }
 
+function showLoading() {
+  main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)"><div class="spin-icon" style="color:var(--accent)">${lucide('loader', 32)}</div><div style="font-size:14px">Loading settings...</div></div>`;
+  const svg = main.querySelector('svg');
+  if (svg) svg.style.animation = 'spin 1.2s linear infinite';
+  if (!document.getElementById('spin-style')) {
+    const st = document.createElement('style');
+    st.id = 'spin-style';
+    st.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.append(st);
+  }
+}
+
+function showError() {
+  main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)"><div style="color:var(--red, #ff453a)">${lucide('alert', 32)}</div><div style="font-size:14px">Could not load settings</div><button class="btn" onclick="location.reload()">Retry</button></div>`;
+}
+
 window.api.onState(init);
-window.api.onGoto((p) => { if (p === 'updates' || p === 'widgets' || PAGES[p]) { page = p; showPage(); } });
-window.api.getState().then((s) => { if (!state) init(s); });
+window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
+showLoading();
+window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
+// Watchdog: if state never arrives within 5s, show error with retry
+setTimeout(() => { if (!stateReady) showError(); }, 5000);

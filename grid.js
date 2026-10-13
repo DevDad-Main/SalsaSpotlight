@@ -197,7 +197,6 @@ module.exports = ({ prefs, wins, persist }) => {
     const colW = Math.round(BASE_COL_WIDTH * s);
     const rowH = Math.round(BASE_ROW_HEIGHT * s);
     const gap = Math.round(GAP * s);
-    const radius = prefs().widgetRadius || 24;
 
     overlayWin = new BrowserWindow({
       x: wa.x, y: wa.y, width: wa.width, height: wa.height,
@@ -206,18 +205,34 @@ module.exports = ({ prefs, wins, persist }) => {
     });
     overlayWin.setIgnoreMouseEvents(true);
 
-    const cols = Math.min(10, Math.floor((wa.width - 48) / (colW + gap)));
-    const rows = Math.min(8, Math.floor((wa.height - 48) / (rowH + gap)));
+    // Build subtle column and row guide lines — macOS-style, not boxes
+    const cellW = colW + gap;
+    const cellH = rowH + gap;
+    const originX = wa.x + MARGIN_RIGHT;
+    const originY = wa.y + MARGIN_TOP;
+    const cols = Math.ceil((wa.width - MARGIN_RIGHT * 2) / cellW);
+    const rows = Math.ceil((wa.height - MARGIN_TOP * 2) / cellH);
 
-    const originX = wa.x + 24;
-    const originY = wa.y + 24;
-
-    let slotsHtml = '';
-    for (let c = 0; c < cols; c++) {
-      const x = originX + c * (colW + gap);
-      for (let r = 0; r < rows; r++) {
-        const y = originY + r * (rowH + gap);
-        slotsHtml += `<div class="slot" style="left:${x}px;top:${y}px;width:${colW}px;height:${rowH}px;border-radius:${radius}px"></div>`;
+    let linesHtml = '';
+    // Vertical column separators
+    for (let c = 1; c <= cols; c++) {
+      const x = originX + c * cellW - Math.round(gap / 2);
+      linesHtml += `<div class="vl" style="left:${x}px"></div>`;
+    }
+    // Horizontal row separators
+    for (let r = 1; r <= rows; r++) {
+      const y = originY + r * cellH - Math.round(gap / 2);
+      linesHtml += `<div class="hl" style="top:${y}px"></div>`;
+    }
+    // Subtle intersection dots at snap points
+    let dotsHtml = '';
+    for (let c = 0; c <= cols; c++) {
+      for (let r = 0; r <= rows; r++) {
+        const x = originX + c * cellW - Math.round(gap / 2);
+        const y = originY + r * cellH - Math.round(gap / 2);
+        if (x > wa.x && x < wa.x + wa.width && y > wa.y && y < wa.y + wa.height) {
+          dotsHtml += `<div class="dot" style="left:${x}px;top:${y}px"></div>`;
+        }
       }
     }
 
@@ -225,29 +240,53 @@ module.exports = ({ prefs, wins, persist }) => {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 100vw; height: 100vh; overflow: hidden; background: transparent;
-        background-image:
-          linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        background-size: ${colW + gap}px ${rowH + gap}px;
-        background-position: ${originX}px ${originY}px;
+        animation: fadeIn 0.25s ease-out;
       }
-      .slot {
-        position: absolute;
-        border: 2px dashed rgba(255, 255, 255, 0.28);
-        background: rgba(255, 255, 255, 0.035);
-        box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.04);
-        animation: fadeIn 0.15s ease-out;
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+      .vl {
+        position: absolute; top: 0; bottom: 0; width: 1px;
+        background: linear-gradient(
+          to bottom,
+          transparent 0%,
+          rgba(255, 255, 255, 0.06) 15%,
+          rgba(255, 255, 255, 0.1) 50%,
+          rgba(255, 255, 255, 0.06) 85%,
+          transparent 100%
+        );
       }
-      @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-    </style></head><body>${slotsHtml}</body></html>`;
+      .hl {
+        position: absolute; left: 0; right: 0; height: 1px;
+        background: linear-gradient(
+          to right,
+          transparent 0%,
+          rgba(255, 255, 255, 0.06) 15%,
+          rgba(255, 255, 255, 0.1) 50%,
+          rgba(255, 255, 255, 0.06) 85%,
+          transparent 100%
+        );
+      }
+      .dot {
+        position: absolute; width: 3px; height: 3px;
+        margin: -1.5px 0 0 -1.5px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+      }
+    </style></head><body>${linesHtml}${dotsHtml}</body></html>`;
 
     overlayWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     overlayWin.once('ready-to-show', () => { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.showInactive(); });
   }
 
   function hideGridOverlay() {
-    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.close();
-    overlayWin = null;
+    if (!overlayWin || overlayWin.isDestroyed()) { overlayWin = null; return; }
+    try {
+      overlayWin.webContents.executeJavaScript('document.body.style.animation="fadeOut 0.2s ease-in forwards"').catch(() => {});
+      setTimeout(() => {
+        if (overlayWin && !overlayWin.isDestroyed()) overlayWin.close();
+        overlayWin = null;
+      }, 200);
+    } catch { overlayWin = null; }
   }
 
   let drag = null;
