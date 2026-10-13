@@ -25,15 +25,13 @@
     const waH = window.screen.height;
     const cols = Math.max(3, Math.min(8, Math.floor(waW / 400)));
     const cellH = Math.round(waH / 22);
-    const maxRows = Math.ceil(waH / cellH);
 
     grid = GridStack.init({
       column: cols,
       cellHeight: cellH,
       margin: 12,
-      float: false,
+      float: true,
       animate: true,
-      maxRow,
       resizable: { handles: 'e, se, s, sw, w' },
       draggable: { handle: '.card', scroll: false },
       acceptWidgets: false,
@@ -89,14 +87,9 @@
     if (!state || instances[type]) return;
     const item = createGridItem(type);
     gridEl.appendChild(item);
-    grid.makeWidget(item);
-    // Ensure proper size after placement (fixes tiny-square race condition)
     const h = DEFAULT_H[type] || 4;
-    requestAnimationFrame(() => {
-      if (!instances[type]) return;
-      const cur = parseInt(item.getAttribute('gs-h') || 0);
-      if (cur < 2) grid.update(item, { h, w: 1 }, false);
-    });
+    // Pass w/h explicitly so gridstack doesn't squeeze into a 1x1 gap
+    grid.makeWidget(item, { w: 1, h });
     instances[type].inst.mount(state.prefs.widgetOpts[type], state.prefs);
   }
 
@@ -111,7 +104,8 @@
   function clampWidget(el) {
     if (!grid) return;
     const cols = grid.opts.column;
-    const maxRows = grid.opts.maxRow || 50;
+    const cellH = grid.opts.cellHeight || 50;
+    const maxRows = Math.ceil(window.screen.height / cellH);
     let x = parseInt(el.getAttribute('gs-x') || 0);
     let y = parseInt(el.getAttribute('gs-y') || 0);
     const w = parseInt(el.getAttribute('gs-w') || 1);
