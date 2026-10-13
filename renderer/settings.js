@@ -317,6 +317,7 @@ function widgetPage() {
     { key: 'arrangeAnchor', label: 'Auto-arrange origin', desc: 'Where widgets cluster when auto-arranged', type: 'select',
       options: [['top-right', 'Top Right (macOS default)'], ['top-left', 'Top Left'], ['bottom-right', 'Bottom Right'], ['bottom-left', 'Bottom Left'], ['center', 'Centered']] },
     { type: 'button', label: 'Show all widgets', desc: 'Open every widget at once', btn: 'Show All', action: () => { Object.keys(state.widgets).forEach((t) => { if (!state.open[t]) window.api.toggleWidget(t); }); } },
+    { type: 'button', label: 'Hide all widgets', desc: 'Close every widget', btn: 'Hide All', action: () => { Object.keys(state.widgets).forEach((t) => { if (state.open[t]) window.api.toggleWidget(t); }); } },
     { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid according to size and priority', btn: 'Arrange Now', action: () => window.api.arrange() },
   ], 45));
   const h2 = document.createElement('h2');
@@ -452,19 +453,21 @@ showLoading();
 let bootstrapped = false;
 function bootstrap() {
   if (bootstrapped) return;
+  if (!window.api) return;
   bootstrapped = true;
   try {
     window.api.onState(init);
     window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
-    window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
+    window.api.getState().then((s) => { if (!stateReady) init(s); }).catch((e) => { console.error('getState failed:', e); if (!stateReady) showError(); });
   } catch (e) {
     console.error('Settings bootstrap failed:', e);
     showError();
   }
 }
-// Wait for preload API to be ready, then bootstrap
-if (window.api) bootstrap();
-else window.addEventListener('load', () => { if (window.api) bootstrap(); else showError(); });
-
-// Watchdog: generous timeout for GFN's slower sessions
-setTimeout(() => { if (!stateReady) showError(); }, 8000);
+// Retry bootstrap until window.api is available (preload may load late)
+const bootstrapInterval = setInterval(() => {
+  if (window.api) { clearInterval(bootstrapInterval); bootstrap(); }
+}, 100);
+bootstrap();
+// Failsafe: show error only if still not ready after 12s
+setTimeout(() => { clearInterval(bootstrapInterval); if (!stateReady) showError(); }, 12000);

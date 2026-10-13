@@ -196,19 +196,52 @@ function startIndex() {
 // ---------- search ----------
 function commandList(q = '') {
   return [
-    { id: 'winsettings', title: 'Windows Settings', sub: 'Open Windows Settings', kw: 'control panel' },
-    { id: 'prefs', title: 'Spotlight Settings', sub: 'Customize Spotlight and widgets', kw: 'preferences options customize' },
-    { id: 'taskmgr', title: 'Task Manager', sub: 'Open Task Manager', kw: 'processes performance' },
-    { id: 'update', title: 'Check for updates', sub: 'Download and install the latest version', kw: 'upgrade version' },
-    { id: 'lock', title: 'Lock PC', sub: 'Lock this computer', kw: 'lock screen' },
-    { id: 'peek', title: 'Peek widgets', sub: 'Show or hide widgets on top', kw: 'widgets show hide' },
-    ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title} widget`, sub: 'Floating widget', kw: 'widget' })),
-    ...(/size|small|medium|large/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: 'resize size widget' }))) : []),
-    { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh' },
-    { id: 'quit', title: 'Quit Spotlight', sub: 'Exit the launcher', kw: 'exit close' },
+    { id: 'winsettings', title: 'Windows Settings', sub: 'Open Windows Settings', kw: 'control panel system preferences' },
+    { id: 'prefs', title: 'Spotlight Settings', sub: 'Customize Spotlight and widgets', kw: 'preferences options customize configure settings' },
+    { id: 'taskmgr', title: 'Task Manager', sub: 'Open Task Manager', kw: 'processes performance tasks' },
+    { id: 'update', title: 'Check for updates', sub: 'Download and install the latest version', kw: 'upgrade version newer' },
+    { id: 'lock', title: 'Lock PC', sub: 'Lock this computer', kw: 'lock screen secure' },
+    { id: 'peek', title: 'Peek widgets', sub: 'Show or hide widgets on top', kw: 'widgets show hide peek floating overlay' },
+    { id: 'spawn', title: 'Show all widgets', sub: 'Open every widget at once', kw: 'all widgets show open enable everything' },
+    { id: 'hideall', title: 'Hide all widgets', sub: 'Close every widget', kw: 'all widgets hide close disable clear' },
+    ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title}`, sub: 'Floating widget', kw: `widget toggle ${t} ${w.title.toLowerCase()}` })),
+    ...(/size|small|medium|large|big|tiny/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: `resize size widget ${t}` }))) : []),
+    { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh rescan index rebuild' },
+    { id: 'quit', title: 'Quit Spotlight', sub: 'Exit the launcher', kw: 'exit close quit shutdown' },
   ];
 }
 
+// Fuzzy match score: higher = better. Returns 0 if no match.
+function fuzzyScore(text, query) {
+  if (!query) return 1;
+  const t = text.toLowerCase();
+  const q = query.toLowerCase();
+  if (t === q) return 1000;
+  if (t.startsWith(q)) return 800;
+  if (t.includes(q)) return 600;
+  // Subsequence matching with bonuses for consecutive/word-boundary matches
+  let ti = 0, score = 0, consecutive = 0;
+  for (let qi = 0; qi < q.length; qi++) {
+    const ch = q[qi];
+    let found = -1;
+    for (let i = ti; i < t.length; i++) {
+      if (t[i] === ch) { found = i; break; }
+    }
+    if (found === -1) return 0; // character not found — no match
+    // Bonus for consecutive characters
+    if (found === ti && qi > 0) consecutive++;
+    else consecutive = 0;
+    // Bonus for word boundary
+    const atWordStart = found === 0 || /[\s._\-([/]/.test(t[found - 1]);
+    score += 10 + consecutive * 15 + (atWordStart ? 20 : 0);
+    ti = found + 1;
+  }
+  // Penalty for long text (prefer shorter matches)
+  score -= Math.min(t.length * 0.3, 30);
+  return Math.max(0, Math.round(score));
+}
+
+// Legacy exact/substring scoring for backward compatibility
 function scoreName(l, q, words) {
   if (l === q) return 1000;
   if (l.startsWith(q)) return 800;
@@ -296,6 +329,11 @@ function search(raw) {
     else if (!q) s = 500;
     else {
       s = scoreName(it.l, q, words);
+      // Fuzzy matching fallback for apps and files
+      if (!s) {
+        const fz = fuzzyScore(it.l, q);
+        if (fz > 0) s = Math.min(fz, 550);
+      }
       if (!s && cq.length >= 2) s = it.c === cq ? 900 : it.c.startsWith(cq) ? 750 : it.c.includes(cq) ? 450 : 0;
       if (!s && it.k >= 2 && q.length >= 2 && fuzzy(it.l, q)) s = 200;
     }
@@ -306,9 +344,11 @@ function search(raw) {
   }
   if (S.commands && !filtered) {
     for (const c of commandList(q)) {
-      const l = `${c.title} ${c.kw}`.toLowerCase();
-      const s = scoreName(l, q, words) || (l.split(' ').some((w) => w.startsWith(q)) ? 650 : 0);
-      if (s) consider({ cmd: c }, s + 100);
+      const titleScore = fuzzyScore(c.title.toLowerCase(), q);
+      const kwScore = fuzzyScore(c.kw || '', q);
+      const subScore = fuzzyScore(c.sub || '', q);
+      const s = Math.max(titleScore, kwScore * 0.8, subScore * 0.6);
+      if (s > 0) consider({ cmd: c }, s + 200);
     }
   }
   hits.sort((a, b) => b[0] - a[0]);
@@ -363,6 +403,9 @@ function openSettings(page) {
   });
   settingsWin.setMenu(null);
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: target ? { page: target } : {} });
+  settingsWin.webContents.on('did-finish-load', () => {
+    try { if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('state', state()); } catch (e) { logError(e); }
+  });
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
@@ -444,6 +487,15 @@ function spawnAllWidgets() {
   }
   saveSettings();
   flash(4000);
+  broadcastState();
+}
+
+function hideAllWidgets() {
+  for (const t of Object.keys(WIDGETS)) {
+    openWidgets.delete(t);
+    settings.widgets[t] = { ...settings.widgets[t], open: false };
+  }
+  saveSettings();
   broadcastState();
 }
 
@@ -717,6 +769,8 @@ function runCommand(id) {
     case 'reindex': startIndex(); break;
     case 'update': openSettings('updates'); checkUpdates(true); break;
     case 'quit': app.quit(); break;
+    case 'spawn': spawnAllWidgets(); break;
+    case 'hideall': hideAllWidgets(); break;
     default:
       if (id.startsWith('size-')) { const [, t, k] = id.split('-'); setWidgetSize(t, k); }
       else if (id.startsWith('w-')) toggleWidget(id.slice(2));
@@ -778,7 +832,23 @@ ipcMain.on('set-click-through', (_e, ignore) => {
   if (desktopWin && !desktopWin.isDestroyed()) desktopWin.setIgnoreMouseEvents(!!ignore, { forward: true });
 });
 
-ipcMain.handle('state', () => state());
+ipcMain.handle('state', () => {
+  try {
+    return state();
+  } catch (e) {
+    logError(e);
+    // Return a minimal safe state so settings can still load
+    return {
+      update: { status: 'idle', version: app.getVersion(), packaged: app.isPackaged },
+      sizes: {},
+      prefs: structuredClone(DEFAULTS),
+      open: {},
+      widgets: {},
+      poller: false,
+      widgetLayout: {},
+    };
+  }
+});
 ipcMain.handle('startup:get', () => ({ ...startupBatch.getStartupStatus(), packaged: app.isPackaged }));
 ipcMain.handle('startup:set', (_e, enabled) => startupBatch.setStartupEnabled(enabled === true, process.execPath));
 ipcMain.on('set', (_e, key, val) => setPref(String(key), val));
@@ -835,6 +905,7 @@ ipcMain.on('widget-menu', (_e, type) => {
     { label: 'Size', submenu: Object.entries(SIZE_LABELS).map(([k, l]) => ({ label: l, type: 'radio', checked: cur === k, click: () => setWidgetSize(t, k) })) },
     { label: 'Auto-arrange widgets', click: () => desktopWin.webContents.send('arrange') },
     { label: 'Show all widgets', click: spawnAllWidgets },
+    { label: 'Hide all widgets', click: hideAllWidgets },
     { label: 'Widget settings...', click: openSettings },
     { type: 'separator' },
     { label: 'Close widget', click: () => toggleWidget(t) },
@@ -955,7 +1026,7 @@ function createTray() {
     ...(updateReady ? [{ label: `Restart to update to ${updateReady}`, click: () => { quitting = true; autoUpdater.quitAndInstall(false, true); } }] : []),
     { type: 'separator' },
     { label: 'Peek widgets on top', type: 'checkbox', checked: peek, click: () => { peek = !peek; applyVisibility(); } },
-    { label: 'Widgets', submenu: [...Object.keys(WIDGETS).map((t) => ({ label: WIDGETS[t].title, type: 'checkbox', checked: openWidgets.has(t), click: () => toggleWidget(t) })), { type: 'separator' }, { label: 'Show all widgets', click: spawnAllWidgets }] },
+    { label: 'Widgets', submenu: [...Object.keys(WIDGETS).map((t) => ({ label: WIDGETS[t].title, type: 'checkbox', checked: openWidgets.has(t), click: () => toggleWidget(t) })), { type: 'separator' }, { label: 'Show all widgets', click: spawnAllWidgets }, { label: 'Hide all widgets', click: hideAllWidgets }] },
     { type: 'separator' },
     { label: 'Launch at login', type: 'checkbox', checked: prefs.launchAtLogin, click: (i) => setPref('launchAtLogin', i.checked) },
     { label: 'Rebuild index', click: startIndex },
