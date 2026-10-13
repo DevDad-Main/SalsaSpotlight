@@ -12,12 +12,12 @@
 
   // Widget default row spans
   const DEFAULT_H = {
-    clock: 3, worldclock: 4, weather: 5, system: 6, specs: 8, disks: 4,
-    calendar: 6, progress: 4, timer: 5, todo: 6, notes: 5, dock: 3,
-    clipboard: 6, gpu: 5, network: 4, countdown: 3, quote: 3,
-    pomodoro: 5, habits: 5, uptime: 3, speedtest: 3, calendarEvents: 5,
+    clock: 4, worldclock: 5, weather: 6, system: 7, specs: 9, disks: 5,
+    calendar: 7, progress: 5, timer: 6, todo: 7, notes: 5, dock: 4,
+    clipboard: 7, gpu: 6, network: 5, countdown: 4, quote: 3,
+    pomodoro: 6, habits: 6, uptime: 3, speedtest: 3, calendarEvents: 6,
   };
-  const MIN_H = { clock: 2, specs: 6, calendar: 5 };
+  const MIN_H = { clock: 3, specs: 7, calendar: 6, weather: 4, system: 5, timer: 5, pomodoro: 5 };
 
   // ── Grid setup ──
   function initGrid() {

@@ -58,12 +58,14 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .w-timer { --accent: var(--orange); }
 
 /* clock */
-.time { font: 200 58px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -0.03em; }
-.time small { font-size: 18px; font-weight: 400; margin-left: 6px; letter-spacing: 0; color: var(--muted); }
-.date { margin-top: 10px; color: var(--red); font-size: 14px; font-weight: 600; }
+.w-clock .content { justify-content: center; }
+.time { font: 200 52px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -0.03em; }
+.time small { font-size: 16px; font-weight: 400; margin-left: 6px; letter-spacing: 0; color: var(--muted); }
+.date { margin-top: 8px; color: var(--red); font-size: 13px; font-weight: 600; }
+.w-clock .time { font-size: 52px; }
 .bar { margin-top: auto; height: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--orange); transition: width 0.9s linear; }
-.analog { display: flex; align-items: center; gap: 16px; flex: 1; }
+.analog { display: flex; align-items: center; justify-content: center; gap: 16px; flex: 1; }
 .analog svg { width: 112px; height: 112px; flex: none; }
 .tk { stroke: var(--muted); stroke-width: 0.8; }
 .tk.big { stroke: var(--text); stroke-width: 1.5; }
@@ -257,26 +259,26 @@ body.noshadow .card { box-shadow: none; }
 /* ── Responsive container queries: widgets adapt when resized ── */
 
 /* Large clock: bigger time, bigger analog, centered */
-@container card (min-width: 420px) {
-  .w-clock .time { font-size: 76px; }
-  .w-clock .time small { font-size: 24px; }
-  .w-clock .date { font-size: 18px; }
-  .w-clock .analog svg { width: 160px; height: 160px; }
-  .w-clock .bigday { font-size: 34px; }
+@container card (min-width: 380px) {
+  .w-clock .time { font-size: 64px; }
+  .w-clock .time small { font-size: 20px; }
+  .w-clock .date { font-size: 15px; }
+  .w-clock .analog svg { width: 140px; height: 140px; }
+  .w-clock .bigday { font-size: 30px; }
 }
-@container card (min-width: 600px) {
-  .w-clock .time { font-size: 100px; }
-  .w-clock .time small { font-size: 30px; }
-  .w-clock .date { font-size: 22px; margin-top: 16px; }
+@container card (min-width: 550px) {
+  .w-clock .time { font-size: 80px; }
+  .w-clock .time small { font-size: 24px; }
+  .w-clock .date { font-size: 18px; margin-top: 12px; }
   .w-clock .analog { justify-content: center; }
-  .w-clock .analog svg { width: 200px; height: 200px; }
-  .w-clock .bigday { font-size: 42px; }
+  .w-clock .analog svg { width: 180px; height: 180px; }
+  .w-clock .bigday { font-size: 38px; }
 }
 
 /* Tall clock: center content vertically */
-@container card (min-height: 340px) {
+@container card (min-height: 280px) {
   .w-clock .content { justify-content: center; align-items: flex-start; }
-  .w-clock .bar { margin-top: 32px; }
+  .w-clock .bar { margin-top: 24px; }
 }
 
 /* Large weather */

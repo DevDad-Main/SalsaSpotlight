@@ -328,7 +328,7 @@ function updateUI() {
     dev: [lucide('wrench', 20), 'Updates work in the installed app', `Running from source (${u.version}).`],
   };
   const [icon, title, sub] = M[u.status] || M.idle;
-  document.getElementById('ui').textContent = icon;
+  document.getElementById('ui').innerHTML = icon;
   t.textContent = title;
   document.getElementById('us').textContent = sub;
   document.getElementById('ui').classList.toggle('spin', u.status === 'checking');
@@ -395,14 +395,21 @@ function logsPage() {
   const h1 = document.createElement('h1');
   h1.textContent = 'Logs';
   main.append(h1);
+  const sub = document.createElement('p');
+  sub.style.cssText = 'color:var(--muted);font-size:13px;margin:-8px 0 16px';
+  sub.textContent = 'Application errors and diagnostics. Useful for troubleshooting.';
+  main.append(sub);
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.padding = '18px';
+  card.style.cssText = 'padding:20px';
   card.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div>
-        <b style="font-size:14px">Application & Error Logs</b>
-        <small id="lp" style="display:block;color:var(--muted);font-size:11px;margin-top:2px"></small>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:var(--tile);display:grid;place-items:center;color:var(--accent)">${lucide('logs', 18)}</div>
+        <div>
+          <b style="font-size:14px">Error Log</b>
+          <small id="lp" style="display:block;color:var(--muted);font-size:11px;margin-top:2px"></small>
+        </div>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn" id="lcopy">Copy</button>
@@ -410,17 +417,25 @@ function logsPage() {
         <button class="btn" id="lopen">Open Folder</button>
       </div>
     </div>
-    <textarea id="ltxt" readonly style="width:100%;height:340px;background:rgba(0,0,0,0.3);border:1px solid var(--line);border-radius:8px;padding:12px;color:#f0f0f5;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:0;user-select:text"></textarea>
+    <textarea id="ltxt" readonly style="width:100%;height:420px;background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:10px;padding:14px;color:#c8c8d0;font-family:Consolas,'Cascadia Code',monospace;font-size:12px;line-height:1.6;resize:vertical;outline:0;user-select:text;white-space:pre-wrap;word-break:break-all"></textarea>
+    <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+      <span id="lcount" style="color:var(--muted);font-size:11px"></span>
+      <span style="color:var(--muted);font-size:11px">Auto-refreshes when you switch to this page</span>
+    </div>
   `;
   main.append(card);
   const txt = card.querySelector('#ltxt');
   const pathEl = card.querySelector('#lp');
+  const countEl = card.querySelector('#lcount');
   const refreshLogs = () => {
     window.api.readLogs().then((res) => {
       pathEl.textContent = res.path;
-      txt.value = res.content || 'Log file is empty.';
+      const content = res.content || 'Log file is empty. All systems running normally.';
+      txt.value = content;
       txt.scrollTop = txt.scrollHeight;
-    }).catch((e) => { txt.value = e.message; });
+      const lines = content.split('\n').filter((l) => l.trim()).length;
+      countEl.textContent = `${lines} line${lines === 1 ? '' : 's'}`;
+    }).catch((e) => { txt.value = `Error reading logs: ${e.message}`; });
   };
   card.querySelector('#lcopy').onclick = () => {
     navigator.clipboard.writeText(txt.value);

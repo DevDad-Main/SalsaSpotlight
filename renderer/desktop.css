@@ -18,7 +18,6 @@ body.hidden #grid { opacity: 0; pointer-events: none; }
 /* Gridstack overrides — widgets are the interactive layer */
 .grid-stack-item { pointer-events: auto; }
 .grid-stack-item-content {
-  inset: 0 !important;
   overflow: visible !important;
   transition: none !important;
 }
