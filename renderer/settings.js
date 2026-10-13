@@ -408,22 +408,27 @@ function refresh() {
 
 function init(s) {
   if (!s || !s.prefs) return;
-  const first = !state;
-  state = s;
-  stateReady = true;
-  if (first) {
-    const all = { ...PAGES, widgets: { title: 'Widgets', icon: 'widgets' }, updates: { title: 'Updates', icon: 'updates' }, logs: { title: 'Logs', icon: 'logs' } };
-    const want = new URLSearchParams(location.search).get('page');
-    if (want && all[want]) page = want;
-    Object.entries(all).forEach(([id, p]) => {
-      const b = document.createElement('button');
-      b.dataset.p = id;
-      b.innerHTML = `${lucide(p.icon, 16)}  <span>${esc(p.title)}</span>`;
-      b.onclick = () => { page = id; showPage(); };
-      nav.append(b);
-    });
-    showPage();
-  } else refresh();
+  try {
+    const first = !state;
+    state = s;
+    stateReady = true;
+    if (first) {
+      const all = { ...PAGES, widgets: { title: 'Widgets', icon: 'widgets' }, updates: { title: 'Updates', icon: 'updates' }, logs: { title: 'Logs', icon: 'logs' } };
+      const want = new URLSearchParams(location.search).get('page');
+      if (want && all[want]) page = want;
+      Object.entries(all).forEach(([id, p]) => {
+        const b = document.createElement('button');
+        b.dataset.p = id;
+        b.innerHTML = `${lucide(p.icon, 16)}  <span>${esc(p.title)}</span>`;
+        b.onclick = () => { page = id; showPage(); };
+        nav.append(b);
+      });
+      showPage();
+    } else refresh();
+  } catch (e) {
+    console.error('Settings init failed:', e);
+    showError();
+  }
 }
 
 function showLoading() {
@@ -442,9 +447,18 @@ function showError() {
   main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)"><div style="color:var(--red, #ff453a)">${lucide('alert', 32)}</div><div style="font-size:14px">Could not load settings</div><button class="btn" onclick="location.reload()">Retry</button></div>`;
 }
 
-window.api.onState(init);
-window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
 showLoading();
-window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
-// Watchdog: if state never arrives within 5s, show error with retry
-setTimeout(() => { if (!stateReady) showError(); }, 5000);
+try {
+  window.api.onState(init);
+  window.api.onGoto((p) => { if (state && (p === 'updates' || p === 'widgets' || PAGES[p])) { page = p; showPage(); } });
+  window.api.getState().then((s) => { if (!stateReady) init(s); }).catch(() => { if (!stateReady) showError(); });
+} catch (e) {
+  console.error('Settings bootstrap failed:', e);
+  showError();
+}
+// Watchdog 1: no state after 3s → error
+setTimeout(() => { if (!stateReady) showError(); }, 3000);
+// Watchdog 2: state received but page still blank → force show error
+setTimeout(() => {
+  if (stateReady && main.innerHTML.includes('Loading settings')) showError();
+}, 5000);
