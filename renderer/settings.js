@@ -1,6 +1,8 @@
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
-let state = null, page = 'general', controls = [], stateReady = false;
+const find = document.getElementById('find');
+let state = null, page = 'general', controls = [], stateReady = false, findTimer = null;
+if (find) find.oninput = () => { clearTimeout(findTimer); findTimer = setTimeout(runFind, 140); };
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
@@ -8,6 +10,19 @@ function esc(s) { const d = document.createElement('div'); d.textContent = Strin
 const SWATCHES = ['#3b6fd4', '#5b6472', '#22262e', '#14b8a6', '#fb7185', '#e11d48', '#38bdf8', '#a78bfa', '#f59e0b', '#10b981', '#8b5cf6', '#2dd4bf', '#8b95ff', '#ffd93d', '#6bcb77', '#ff9ff3'];
 const KEYS = [['Alt+Space', 'Alt + Space'], ['Ctrl+Space', 'Ctrl + Space'], ['Ctrl+Alt+Space', 'Ctrl + Alt + Space'], ['Ctrl+Shift+Space', 'Ctrl + Shift + Space'], ['Alt+Shift+Space', 'Alt + Shift + Space'], ['Ctrl+Alt+S', 'Ctrl + Alt + S']];
 const PEEK_KEYS = [['Alt+W', 'Alt + W'], ['Ctrl+Alt+W', 'Ctrl + Alt + W'], ['Ctrl+Shift+W', 'Ctrl + Shift + W'], ['', 'Disabled']];
+const SHORTCUTS = [
+  ['Enter', 'Open selected result'],
+  ['Ctrl+Enter', 'Show in folder'],
+  ['Ctrl+Shift+C', 'Copy path'],
+  ['Ctrl+P', 'File properties'],
+  ['Ctrl+I', 'Details panel'],
+  ['Ctrl+R', 'Rebuild search index'],
+  ['Ctrl+Shift+R', 'Remove item from recents'],
+  ['Up/Down/Tab', 'Move selection'],
+  ['Shift+Tab', 'Move selection backwards'],
+  ['?', 'Show shortcuts in Spotlight'],
+  ['Esc', 'Close panel, then Spotlight'],
+];
 const pct = (v) => Math.round(v * 100) + '%';
 const px = (v) => v + ' px';
 
@@ -24,6 +39,7 @@ const PAGES = {
     { title: 'Help', items: [
       { key: 'showTour', label: 'Show welcome tour at startup', desc: 'Displays the 3-step intro each time SalsaSpotlight launches', type: 'toggle' },
       { type: 'button', label: 'Need a refresher?', desc: 'Open the welcome tour now', btn: 'Show help', action: () => window.api.showTour() },
+      { type: 'keys' },
     ] },
     { title: 'Reset', items: [{ type: 'button', label: 'Reset all settings', desc: 'Restore the defaults', btn: 'Reset', action: () => window.api.reset() }] },
   ] },
@@ -284,6 +300,7 @@ function control(item) {
 }
 
 function row(item) {
+  if (item.type === 'keys') return keysBox();
   const r = document.createElement('div');
   r.className = 'item';
   const l = document.createElement('div');
@@ -294,6 +311,107 @@ function row(item) {
   if (item.desc) { const s = document.createElement('small'); s.textContent = item.desc; l.append(s); }
   r.append(l, control(item));
   return r;
+}
+
+function keysBox() {
+  const box = document.createElement('div');
+  box.className = 'keysbox';
+  const h = document.createElement('div');
+  h.className = 'kh';
+  h.textContent = 'Keyboard shortcuts';
+  box.append(h);
+  SHORTCUTS.forEach(([combo, desc]) => {
+    const rw = document.createElement('div');
+    rw.className = 'krow';
+    const kk = document.createElement('div');
+    kk.className = 'kk';
+    combo.split('+').forEach((part, i) => {
+      if (i) {
+        const plus = document.createElement('span');
+        plus.className = 'kp';
+        plus.textContent = '+';
+        kk.append(plus);
+      }
+      const k = document.createElement('kbd');
+      k.textContent = part;
+      kk.append(k);
+    });
+    const dd = document.createElement('div');
+    dd.className = 'kd';
+    dd.textContent = desc;
+    rw.append(kk, dd);
+    box.append(rw);
+  });
+  return box;
+}
+
+// Titlebar search — find any setting across pages.
+const pgTitle = (p) => (PAGES[p] ? PAGES[p].title : 'Widgets');
+function runFind() {
+  if (!find) return;
+  const raw = find.value.trim();
+  if (!raw) { showPage(); return; }
+  const q = raw.toLowerCase();
+  const hits = [];
+  Object.entries(PAGES).forEach(([pg, def]) => {
+    (def.groups || []).forEach((g) => {
+      (g.items || []).forEach((it) => {
+        if (!it || typeof it.label !== 'string') return;
+        if ((it.label + ' ' + (it.desc || '') + ' ' + g.title + ' ' + def.title).toLowerCase().includes(q)) {
+          hits.push({ page: pg, group: g.title, label: it.label, desc: it.desc || '' });
+        }
+      });
+    });
+  });
+  Object.entries(WIDGET_OPTS).forEach(([type, opts]) => {
+    const title = (state && state.widgets && state.widgets[type]) || type;
+    (opts || []).forEach((it) => {
+      if (!it || typeof it.label !== 'string') return;
+      if ((it.label + ' ' + (it.desc || '') + ' ' + title + ' widget').toLowerCase().includes(q)) {
+        hits.push({ page: 'widgets', group: title + ' widget', label: it.label, desc: it.desc || '' });
+      }
+    });
+  });
+  controls = [];
+  main.replaceChildren();
+  main.scrollTop = 0;
+  nav.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+  const h1 = document.createElement('h1');
+  h1.textContent = hits.length ? `${hits.length} result${hits.length === 1 ? '' : 's'} for "${raw}"` : 'No settings found';
+  main.append(h1);
+  if (!hits.length) {
+    const e = document.createElement('div');
+    e.className = 's-empty';
+    e.textContent = 'Try a different word, e.g. "accent", "blur" or "index".';
+    main.append(e);
+    return;
+  }
+  hits.forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 's-hit';
+    const l = document.createElement('div');
+    const t = document.createElement('b');
+    t.textContent = r.label;
+    const d = document.createElement('small');
+    d.textContent = r.desc;
+    l.append(t, d);
+    const pg = document.createElement('span');
+    pg.className = 's-pg';
+    pg.textContent = `${pgTitle(r.page)} · ${r.group}`;
+    b.append(l, pg);
+    b.onclick = () => { find.value = ''; page = r.page; showPage(); setTimeout(() => highlightItem(r.label), 80); };
+    main.append(b);
+  });
+}
+function highlightItem(label) {
+  const labels = Array.from(main.querySelectorAll('.item .l b')).filter((x) => x.textContent === label);
+  labels.forEach((el) => {
+    const item = el.closest('.item');
+    if (!item) return;
+    item.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    item.classList.add('hitflash');
+    setTimeout(() => item.classList.remove('hitflash'), 2400);
+  });
 }
 
 function group(title, items, delay) {
@@ -497,6 +615,7 @@ function logsPage() {
 }
 
 function showPage() {
+  if (find && find.value) find.value = '';
   controls = [];
   main.replaceChildren();
   main.scrollTop = 0;

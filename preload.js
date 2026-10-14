@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   search: (q) => ipcRenderer.invoke('search', q),
   run: (item, q, reveal) => ipcRenderer.invoke('run', { item, q, reveal }),
   icon: (p) => ipcRenderer.invoke('icon', p),
-  resize: (h) => ipcRenderer.send('resize', h),
+  resize: (h, w) => ipcRenderer.send('resize', h, w),
   hide: () => ipcRenderer.send('hide'),
   onShown: (cb) => ipcRenderer.on('shown', cb),
   // details panel

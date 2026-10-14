@@ -61,3 +61,37 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 .upd-btns { display: flex; gap: 10px; margin-top: 18px; }
 .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Titlebar search */
+.titlebar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+.titlebar span { font-size: 12px; }
+#find {
+  -webkit-app-region: no-drag; margin-right: 142px;
+  width: 210px; height: 24px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); color: var(--text); font: inherit; font-size: 12px; outline: none;
+  transition: border-color 0.15s, width 0.2s;
+}
+#find:focus { border-color: var(--accent); width: 250px; }
+#find::placeholder { color: var(--muted); }
+
+/* Settings search results */
+.s-hit { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 13px 16px; min-height: 56px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.s-hit + .s-hit { border-top: 1px solid var(--line); }
+.s-hit:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.s-hit b { display: block; font-size: 14px; font-weight: 500; }
+.s-hit small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.s-pg { flex: none; font-size: 11px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.s-empty { font-size: 13px; color: var(--muted); padding: 8px 4px; }
+.item.hitflash { animation: hitflash 2.2s ease; border-radius: 10px; }
+@keyframes hitflash { 0%, 100% { background: transparent; } 12%, 75% { background: color-mix(in srgb, var(--accent) 24%, transparent); } }
+
+/* Keyboard shortcuts list (Settings > Help) */
+.keysbox { padding: 4px 2px 6px; }
+.keysbox .kh { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.krow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.krow:last-child { border-bottom: 0; }
+.kk { display: flex; align-items: center; gap: 4px; flex: none; }
+.kk .kp { color: var(--muted); font-size: 11px; }
+.kd { color: var(--muted); text-align: right; }
+.keysbox kbd { background: rgba(127, 127, 127, 0.18); border-radius: 5px; padding: 1px 6px; font: inherit; font-size: 11.5px; }

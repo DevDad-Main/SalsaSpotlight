@@ -1,7 +1,21 @@
 const $ = (id) => document.getElementById(id);
 const input = $('q'), list = $('list'), foot = $('foot'), app = $('app'), wrap = $('wrap'),
-  details = $('details'), toastEl = $('toast');
+  details = $('details'), toastEl = $('toast'), keysOv = $('keys-ov');
 let results = [], sel = 0, seq = 0, recents = true, detailsOpen = false;
+
+const KEYS_HELP = [
+  [['Enter'], 'Open selected result'],
+  [['Ctrl', 'Enter'], 'Show in folder'],
+  [['Ctrl', 'Shift', 'C'], 'Copy path'],
+  [['Ctrl', 'P'], 'File properties'],
+  [['Ctrl', 'I'], 'Details panel'],
+  [['Ctrl', 'R'], 'Rebuild search index'],
+  [['Ctrl', 'Shift', 'R'], 'Remove item from recents'],
+  [['↑', '↓', 'Tab'], 'Move selection'],
+  [['Shift', 'Tab'], 'Move selection backwards'],
+  [['?'], 'Show this shortcut list'],
+  [['Esc'], 'Close panel, then Spotlight'],
+];
 
 const svg = (body, color) => `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const ICONS = {
@@ -128,11 +142,57 @@ function run(reveal) {
 
 async function update() {
   const my = ++seq;
+  if (/^\s*(\?|keys|keybinds|shortcuts)\s*$/i.test(input.value)) {
+    setKeysOpen(true);
+    results = [];
+    sel = 0;
+    list.replaceChildren();
+    foot.hidden = true;
+    return;
+  }
+  setKeysOpen(false);
   const r = await window.api.search(input.value);
   if (my !== seq) return;
   results = arrange(r);
   sel = 0;
   render();
+}
+
+// ---------- shortcuts overlay ----------
+function setKeysOpen(open) {
+  if (!open && keysOv.hidden) return;
+  keysOv.hidden = !open;
+  document.body.classList.toggle('keys', open);
+  if (open) {
+    if (detailsOpen) setDetails(false);
+    renderKeys();
+  }
+}
+function renderKeys() {
+  const box = document.getElementById('ko-list');
+  if (!box || box.childElementCount) return;
+  KEYS_HELP.forEach(([combo, desc]) => {
+    const row = document.createElement('div');
+    row.className = 'ko-row';
+    const k = document.createElement('div');
+    k.className = 'ko-k';
+    combo.forEach((part, i) => {
+      if (i) {
+        const plus = document.createElement('span');
+        plus.className = 'plus';
+        plus.textContent = '+';
+        k.append(plus);
+      }
+      const kd = document.createElement('kbd');
+      kd.textContent = part;
+      k.append(kd);
+    });
+    const d = document.createElement('div');
+    d.className = 'ko-d';
+    d.textContent = desc;
+    row.append(k, d);
+    box.append(row);
+  });
 }
 
 // ---------- details panel (Windhawk-style) ----------
@@ -286,7 +346,11 @@ document.addEventListener('keydown', (e) => {
     mark(); e.preventDefault();
   }
   else if (e.key === 'Enter') run(e.ctrlKey);
-  else if (e.key === 'Escape') { if (detailsOpen) setDetails(false); else window.api.hide(); }
+  else if (e.key === 'Escape') {
+    if (!keysOv.hidden) { setKeysOpen(false); input.value = ''; update(); }
+    else if (detailsOpen) setDetails(false);
+    else window.api.hide();
+  }
   else if (ctrl && e.shiftKey && (e.key === 'C' || e.key === 'c')) { copyPath(); e.preventDefault(); }
   else if (ctrl && e.shiftKey && (e.key === 'R' || e.key === 'r')) { forgetRecent(); e.preventDefault(); }
   else if (ctrl && !e.shiftKey && (e.key === 'P' || e.key === 'p')) { showProps(); e.preventDefault(); }
@@ -310,7 +374,10 @@ setupChip('chip-folders', 'type:folder ');
 setupChip('chip-files', 'type:file ');
 setupChip('chip-calc', '12 * 5 + ');
 
-new ResizeObserver(() => window.api.resize(Math.ceil(wrap.getBoundingClientRect().height))).observe(wrap);
+new ResizeObserver(() => {
+  const rect = wrap.getBoundingClientRect();
+  window.api.resize(Math.ceil(rect.height), Math.ceil(rect.width));
+}).observe(wrap);
 
 function applyPrefs(p) {
   const r = document.documentElement.style;
@@ -318,6 +385,7 @@ function applyPrefs(p) {
   const acrylic = eff === 'acrylic';
   r.setProperty('--accent', p.accent);
   r.setProperty('--lr', p.launcherRadius + 'px');
+  r.setProperty('--lw', p.launcherWidth + 'px');
   r.setProperty('--ta', acrylic ? p.tint : 0.7 + p.tint * 0.28);
   r.setProperty('--pad', acrylic ? '0px' : '18px');
   r.setProperty('--sb', `${10 + (Number(p.spotlightBlur) || 50) * 0.6}px`);
@@ -333,6 +401,7 @@ window.api.getState().then((s) => applyPrefs(s.prefs));
 window.api.onState((s) => applyPrefs(s.prefs));
 
 window.api.onShown(() => {
+  if (detailsOpen) setDetails(false);
   app.classList.remove('pop');
   void app.offsetWidth;
   app.classList.add('pop');

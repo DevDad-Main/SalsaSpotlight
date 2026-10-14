@@ -1061,9 +1061,14 @@ ipcMain.handle('run', async (_e, { item, q, reveal }) => {
 });
 
 let launcherHeight = 70;
-ipcMain.on('resize', (_e, h) => {
-  launcherHeight = Math.max(70 + PAD() * 2, Math.min(h, 860));
-  if (win && win.isVisible()) win.setContentSize(winWidth(), launcherHeight);
+ipcMain.on('resize', (_e, h, w) => {
+  launcherHeight = Math.max(70 + PAD() * 2, Math.min(Number(h) || 70, 860));
+  if (win && win.isVisible()) {
+    const width = Math.min(Math.max(winWidth(), Math.round(Number(w) || 0)), 1400);
+    win.setContentSize(width, launcherHeight);
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+    win.setPosition(Math.round(d.x + (d.width - width) / 2), win.getPosition()[1]);
+  }
 });
 ipcMain.on('hide', () => win.hide());
 ipcMain.on('close-widget', (_e, type) => toggleWidget(String(type)));
