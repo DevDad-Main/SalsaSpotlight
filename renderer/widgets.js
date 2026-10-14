@@ -358,7 +358,7 @@ function createWidget(type, el, card, api) {
     },
 
     gpu(o) {
-      const showVram = o.showVram !== false, showTemp = o.showTemp !== false, showPower = o.showPower !== false, showClock = o.showClock === true;
+      const showVram = o.showVram !== false, showTemp = o.showTemp !== false, showPower = o.showPower !== false, showClock = o.showClock === true, showFan = o.showFan === true;
       el.innerHTML = `${head('GPU')}<div class="gpu">${gauge('u', 'p', 'GPU')}<div class="gst" data-k="gs"></div></div>`
         + (showVram ? '<div class="vr"><div class="top"><span class="muted">VRAM</span><span data-k="vt"></span></div><div class="track"><div class="fill" data-k="vf"></div></div></div>' : '')
         + '<div class="foot" data-k="gn"></div>';
@@ -374,6 +374,7 @@ function createWidget(type, el, card, api) {
         if (showTemp) stats.push(['Temperature', dash(g.temp, '°C')]);
         if (showPower) stats.push(['Power', dash(g.power, ' W')]);
         if (showClock) stats.push(['Clock', dash(g.clock, ' MHz')]);
+        if (showFan) stats.push(['Fan', dash(g.fan, '%')]);
         if (gs) gs.innerHTML = stats.map(([l, v]) => `<div class="st"><small>${l}</small><b>${esc(v)}</b></div>`).join('');
         if (showVram && g.memTotal) {
           const vt = $('[data-k="vt"]', el); if (vt) vt.textContent = `${(g.memUsed / 1024).toFixed(1)} / ${(g.memTotal / 1024).toFixed(0)} GB`;
@@ -404,16 +405,36 @@ function createWidget(type, el, card, api) {
     },
 
     countdown(o) {
-      const target = new Date(`${o.date}T00:00:00`);
+      const recur = o.recur || 'none'; // none, yearly, monthly, weekly
+      const nextDate = () => {
+        const base = new Date(`${o.date}T00:00:00`);
+        if (Number.isNaN(base.getTime())) return base;
+        if (recur === 'none') return base;
+        const now = new Date();
+        const d = new Date(base);
+        if (recur === 'yearly') {
+          d.setFullYear(now.getFullYear());
+          if (d < now) d.setFullYear(now.getFullYear() + 1);
+        } else if (recur === 'monthly') {
+          d.setFullYear(now.getFullYear(), now.getMonth());
+          if (d < now) d.setFullYear(now.getFullYear(), now.getMonth() + 1);
+        } else if (recur === 'weekly') {
+          d.setDate(d.getDate() + ((7 - d.getDay() + now.getDay()) % 7 || 7));
+          if (d < now) d.setDate(d.getDate() + 7);
+        }
+        return d;
+      };
       el.innerHTML = `${head('Countdown')}<div class="cd"><div class="cdn" data-k="cn"></div><div class="cdl" data-k="cl"></div></div><div class="foot" data-k="cs"></div>`;
       every(() => {
         const cn = $('[data-k="cn"]', el);
         if (!cn) return;
+        const target = nextDate();
         if (Number.isNaN(target.getTime())) { cn.textContent = '?'; const cl = $('[data-k="cl"]', el); if (cl) cl.textContent = 'Set a date (YYYY-MM-DD) in Settings'; return; }
         const diff = target - new Date();
         const days = Math.ceil(diff / 864e5);
         cn.innerHTML = days === 0 ? lucide('sparkles', '', 48) : String(Math.abs(days));
-        const cl = $('[data-k="cl"]', el); if (cl) cl.textContent = days === 0 ? `Today: ${o.title}` : days > 0 ? `day${days === 1 ? '' : 's'} until ${o.title}` : `day${days === -1 ? '' : 's'} since ${o.title}`;
+        const recurLabel = recur !== 'none' ? ` (${recur})` : '';
+        const cl = $('[data-k="cl"]', el); if (cl) cl.textContent = days === 0 ? `Today: ${o.title}` : days > 0 ? `day${days === 1 ? '' : 's'} until ${o.title}${recurLabel}` : `day${days === -1 ? '' : 's'} since ${o.title}`;
         const cs = $('[data-k="cs"]', el); if (cs) cs.textContent = diff > 0 ? `${Math.floor(diff / 36e5) % 24}h ${Math.floor(diff / 6e4) % 60}m to go today` : '';
       }, 30000);
     },
@@ -559,18 +580,40 @@ function createWidget(type, el, card, api) {
 
     notes(o) {
       const fs = Math.max(11, Math.min(22, o.fontSize || 14));
-      el.innerHTML = `${head('Notes')}<textarea class="inp" data-k="n" placeholder="Jot something down..." style="font-size:${fs}px"></textarea><div class="saved" data-k="sv">Saved</div>`;
+      const md = o.markdown === true;
+      el.innerHTML = `${head('Notes')}<textarea class="inp" data-k="n" placeholder="Jot something down..." style="font-size:${fs}px"${md ? ' hidden' : ''}></textarea>`
+        + (md ? `<div class="md" data-k="md" style="font-size:${fs}px"></div>` : '')
+        + `<div class="head-row" style="padding:0 12px"><button data-k="tg" style="font-size:10px;opacity:.6">${md ? 'Edit' : 'Preview'}</button><div class="saved" data-k="sv" style="margin-left:auto"></div></div>`;
       const n = $('[data-k="n"]', el);
+      const mdEl = $('[data-k="md"]', el);
       if (!n) return;
       n.value = localStorage.getItem('note') || '';
+      const renderMd = (text) => {
+        let h = esc(text);
+        h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
+        h = h.replace(/^- (.+)$/gm, '<li>$1</li>').replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+        h = h.replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
+        h = h.replace(/\n/g, '<br>');
+        return h || '<span style="opacity:.4">Nothing yet...</span>';
+      };
+      const update = () => { if (mdEl) mdEl.innerHTML = renderMd(n.value); };
       let t;
       n.addEventListener('input', () => {
         const sv = $('[data-k="sv"]', el);
-        if (!sv) return;
-        sv.style.opacity = 0.2; sv.textContent = 'Saving...';
+        if (sv) { sv.style.opacity = 0.2; sv.textContent = 'Saving...'; }
         clearTimeout(t);
-        t = setTimeout(() => { localStorage.setItem('note', n.value); sv.textContent = `Saved - ${n.value.length} chars`; sv.style.opacity = 1; }, 400);
+        t = setTimeout(() => { localStorage.setItem('note', n.value); if (sv) { sv.textContent = `Saved - ${n.value.length} chars`; sv.style.opacity = 1; } update(); }, 400);
       });
+      const tg = $('[data-k="tg"]', el);
+      if (tg) tg.onclick = () => {
+        const showing = !n.hidden;
+        n.hidden = showing;
+        if (mdEl) mdEl.hidden = !showing;
+        tg.textContent = showing ? 'Edit' : 'Preview';
+        if (showing) update();
+      };
+      if (md) update();
       const sv = $('[data-k="sv"]', el); if (sv) sv.textContent = `${n.value.length} chars`;
     },
 
@@ -625,11 +668,16 @@ function createWidget(type, el, card, api) {
       const BREAK = Math.max(2, Math.min(30, o.breakMin || 5)) * 60;
       const LONG = Math.max(5, Math.min(60, o.longBreakMin || 15)) * 60;
       const SESS = Math.max(1, Math.min(8, o.sessionsBeforeLong || 4));
+      const FOCUS = o.focusMode === true;
       let mode = 'work', remaining = WORK, running = false, completed = 0, end = 0;
       el.innerHTML = `${head('Pomodoro')}<div class="ringwrap" data-k="rw"><svg viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="38"/><circle class="fg" data-k="rg" cx="46" cy="46" r="38" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/></svg><div class="tm" data-k="tm"></div></div>`
         + '<div class="foot" data-k="md"></div>'
         + '<div class="btns"><button class="main" data-k="go">Start</button><button data-k="rs">Reset</button></div>'
         + '<div class="foot" data-k="st"></div>';
+      const setFocus = (on) => {
+        if (!FOCUS) return;
+        document.body.classList.toggle('focus-mode', on && mode === 'work');
+      };
       const draw = () => {
         const tm = $('[data-k="tm"]', el); if (tm) tm.textContent = `${pad(Math.floor(remaining / 60))}:${pad(Math.ceil(remaining) % 60)}`;
         const rg = $('[data-k="rg"]', el);
@@ -654,15 +702,16 @@ function createWidget(type, el, card, api) {
         if (remaining <= 0) {
           running = false;
           beep();
+          setFocus(false);
           if (mode === 'work') { completed++; mode = completed % SESS === 0 ? 'long' : 'break'; remaining = mode === 'long' ? LONG : BREAK; }
           else { mode = 'work'; remaining = WORK; }
-          new Notification(`Pomodoro ${mode === 'work' ? 'break over' : 'done'}`, { body: mode === 'work' ? 'Back to focus!' : 'Time for a break.' });
+          new Notification(`Pomodoro: ${mode === 'work' ? 'Break over' : 'Session complete'}`, { body: mode === 'work' ? 'Back to focus!' : `Time for a ${mode === 'long' ? 'long' : 'short'} break.`, silent: false });
           const rw = $('[data-k="rw"]', el); if (rw) { rw.classList.add('done'); setTimeout(() => rw.classList.remove('done'), 2200); }
         }
         draw();
       }, 200));
-      const go = $('[data-k="go"]', el); if (go) go.onclick = () => { running = !running; end = Date.now() + remaining * 1000; draw(); };
-      const rs = $('[data-k="rs"]', el); if (rs) rs.onclick = () => { running = false; remaining = mode === 'work' ? WORK : mode === 'break' ? BREAK : LONG; draw(); };
+      const go = $('[data-k="go"]', el); if (go) go.onclick = () => { running = !running; end = Date.now() + remaining * 1000; setFocus(running); draw(); };
+      const rs = $('[data-k="rs"]', el); if (rs) rs.onclick = () => { running = false; remaining = mode === 'work' ? WORK : mode === 'break' ? BREAK : LONG; setFocus(false); draw(); };
       draw();
     },
 
@@ -671,9 +720,29 @@ function createWidget(type, el, card, api) {
       let habits = [];
       try { habits = JSON.parse(localStorage.getItem('habits') || '[]'); } catch { /* corrupt */ }
       const today = () => new Date().toDateString();
+      const dayKey = (d) => d.toISOString().slice(0, 10);
       let checkins = {};
       try { checkins = JSON.parse(localStorage.getItem('habitCheckins') || '{}'); } catch { /* corrupt */ }
       const isChecked = (name) => (checkins[name] || []).includes(today());
+      const calcStreak = (name) => {
+        const days = new Set(checkins[name] || []);
+        let streak = 0;
+        const d = new Date();
+        // Today may or may not be checked — streak counts consecutive days ending today or yesterday
+        if (!days.has(dayKey(d))) d.setDate(d.getDate() - 1);
+        while (days.has(dayKey(d))) { streak++; d.setDate(d.getDate() - 1); }
+        return streak;
+      };
+      const heatRow = (name) => {
+        const days = new Set(checkins[name] || []);
+        let cells = '';
+        for (let i = 27; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          const on = days.has(dayKey(d));
+          cells += `<span class="hc${on ? ' on' : ''}" title="${d.toLocaleDateString()}"></span>`;
+        }
+        return `<div class="heat">${cells}</div>`;
+      };
       el.innerHTML = `${head('Habits', '<span class="muted" data-k="cnt" style="margin-left:auto;margin-right:20px"></span>')}<input class="inp" data-k="in" placeholder="Add a habit and press Enter"><div class="list" data-k="ls"></div>`;
       const save = () => { localStorage.setItem('habits', JSON.stringify(habits)); localStorage.setItem('habitCheckins', JSON.stringify(checkins)); };
       const draw = () => {
@@ -682,10 +751,11 @@ function createWidget(type, el, card, api) {
         ls.replaceChildren();
         habits.slice(0, maxItems).forEach((h, i) => {
           const checked = isChecked(h);
-          const streak = (checkins[h] || []).filter((d) => { const dd = new Date(d); return dd >= new Date(Date.now() - 30 * 864e5); }).length;
+          const streak = calcStreak(h);
           const r = document.createElement('div');
           r.className = 'todo' + (checked ? ' done' : '');
-          r.innerHTML = `<div class="cb">${lucide('check', '', 12)}</div><span></span><small class="muted" style="margin-left:auto;margin-right:8px"></small><button class="del">&times;</button>`;
+          r.innerHTML = `<div class="cb">${lucide('check', '', 12)}</div><span></span><small class="muted" style="margin-left:auto;margin-right:8px"></small><button class="del">&times;</button>`
+            + (o.heatmap !== false ? heatRow(h) : '');
           $('span', r).textContent = h;
           const sm = $('small', r); if (sm) sm.textContent = `${streak}d streak`;
           $('.cb', r).onclick = () => {
@@ -780,9 +850,21 @@ function createWidget(type, el, card, api) {
       }, 1000);
     },
 
-    speedtest() {
-      el.innerHTML = `${head('Speed Test')}<div class="time grad" data-k="sp">--</div><div class="foot" data-k="st">Click to test</div><div class="btns"><button class="main" data-k="go">Run Test</button></div>`;
+    speedtest(o) {
+      el.innerHTML = `${head('Speed Test')}<div class="time grad" data-k="sp">--</div><div class="foot" data-k="st">Click to test</div>`
+        + '<div class="rows" data-k="hs" style="max-height:80px;overflow-y:auto"></div>'
+        + '<div class="btns"><button class="main" data-k="go">Run Test</button></div>';
       const tk = mountSeq;
+      const loadHistory = () => { try { return JSON.parse(localStorage.getItem('speedHistory') || '[]'); } catch { return []; } };
+      const saveHistory = (h) => localStorage.setItem('speedHistory', JSON.stringify(h.slice(0, 20)));
+      const drawHistory = () => {
+        const hs = $('[data-k="hs"]', el);
+        if (!hs) return;
+        const h = loadHistory();
+        if (!h.length) { hs.innerHTML = ''; return; }
+        hs.innerHTML = h.slice(0, 5).map((e) => `<div class="row" style="padding:2px 12px"><span class="ri">${lucide('trendingUp', 'ri-svg', 12)}</span><div><small>${esc(e.time)}</small><b>${e.mbps.toFixed(1)} Mbps</b></div></div>`).join('');
+      };
+      drawHistory();
       const runTest = async () => {
         const sp = $('[data-k="sp"]', el);
         const st = $('[data-k="st"]', el);
@@ -805,6 +887,10 @@ function createWidget(type, el, card, api) {
           const mbps = (bytes * 8) / elapsed / 1e6;
           sp.textContent = `${mbps.toFixed(1)} Mbps`;
           st.textContent = `${(bytes / 1e6).toFixed(1)} MB in ${elapsed.toFixed(1)}s`;
+          const hist = loadHistory();
+          hist.unshift({ mbps, time: new Date().toLocaleTimeString() });
+          saveHistory(hist);
+          drawHistory();
         } catch {
           sp.textContent = 'Failed';
           st.textContent = 'Could not reach test server';

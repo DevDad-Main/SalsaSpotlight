@@ -457,3 +457,23 @@ body.noshadow .card { box-shadow: none; }
   .w-clock .time { font-size: 44px; }
   .w-weather .wtemp { font-size: 38px; }
 }
+
+/* ── Habit heatmap ── */
+.heat { display: flex; gap: 2px; padding: 4px 0 0 29px; }
+.hc { width: 8px; height: 8px; border-radius: 2px; background: var(--track); flex: none; }
+.hc.on { background: var(--green); }
+
+/* ── Notes markdown preview ── */
+.md { flex: 1; overflow-y: auto; padding: 8px 4px; line-height: 1.5; }
+.md h1 { font-size: 1.3em; margin: 0.4em 0 0.2em; }
+.md h2 { font-size: 1.15em; margin: 0.4em 0 0.2em; }
+.md h3 { font-size: 1.05em; margin: 0.3em 0 0.15em; }
+.md b { color: var(--text); }
+.md i { color: var(--muted); }
+.md code { background: var(--track); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; font-family: Consolas, monospace; }
+.md ul { padding-left: 18px; margin: 0.3em 0; }
+.md li { margin: 0.15em 0; }
+
+/* ── Pomodoro focus mode ── */
+body.focus-mode .grid-stack-item:not(.w-pomodoro) { opacity: 0.15; pointer-events: none; transition: opacity 0.4s; }
+body.focus-mode .grid-stack-item.w-pomodoro { opacity: 1; z-index: 10; }

@@ -84,6 +84,8 @@ const WIDGET_OPTS = {
   countdown: [
     { key: 'widgetOpts.countdown.title', label: 'Event name', type: 'text' },
     { key: 'widgetOpts.countdown.date', label: 'Date', desc: 'Format YYYY-MM-DD', type: 'text' },
+    { key: 'widgetOpts.countdown.recur', label: 'Repeat', desc: 'Recurring countdown for birthdays etc', type: 'select',
+      options: [['none', 'Once'], ['yearly', 'Every year'], ['monthly', 'Every month'], ['weekly', 'Every week']] },
   ],
   progress: [
     { key: 'widgetOpts.progress.showYear', label: 'Show year progress', type: 'toggle' },
@@ -99,6 +101,7 @@ const WIDGET_OPTS = {
   ],
   notes: [
     { key: 'widgetOpts.notes.fontSize', label: 'Font size', type: 'range', min: 11, max: 22, step: 1, fmt: (v) => v + 'px' },
+    { key: 'widgetOpts.notes.markdown', label: 'Markdown preview', desc: 'Render **bold**, *italic*, # headings, - lists', type: 'toggle' },
   ],
   dock: [
     { key: 'widgetOpts.dock.columns', label: 'Columns', type: 'range', min: 3, max: 8, step: 1, fmt: (v) => v },
@@ -112,12 +115,14 @@ const WIDGET_OPTS = {
     { key: 'widgetOpts.gpu.showTemp', label: 'Show temperature', type: 'toggle' },
     { key: 'widgetOpts.gpu.showPower', label: 'Show power draw', type: 'toggle' },
     { key: 'widgetOpts.gpu.showClock', label: 'Show clock speed', type: 'toggle' },
+    { key: 'widgetOpts.gpu.showFan', label: 'Show fan speed', type: 'toggle' },
   ],
   network: [
     { key: 'widgetOpts.network.showIface', label: 'Show interface name', type: 'toggle' },
   ],
   habits: [
     { key: 'widgetOpts.habits.maxItems', label: 'Maximum habits', type: 'range', min: 3, max: 12, step: 1, fmt: (v) => v },
+    { key: 'widgetOpts.habits.heatmap', label: 'Show 28-day heatmap', desc: 'Visual calendar of check-ins', type: 'toggle' },
   ],
   uptime: [
     { key: 'widgetOpts.uptime.showSeconds', label: 'Show seconds', type: 'toggle' },
@@ -131,6 +136,7 @@ const WIDGET_OPTS = {
     { key: 'widgetOpts.pomodoro.breakMin', label: 'Break minutes', type: 'range', min: 3, max: 30, step: 1, fmt: (v) => v + ' min' },
     { key: 'widgetOpts.pomodoro.longBreakMin', label: 'Long break minutes', type: 'range', min: 10, max: 45, step: 5, fmt: (v) => v + ' min' },
     { key: 'widgetOpts.pomodoro.sessionsBeforeLong', label: 'Sessions before long break', type: 'range', min: 2, max: 6, step: 1, fmt: (v) => v },
+    { key: 'widgetOpts.pomodoro.focusMode', label: 'Focus mode', desc: 'Dim other widgets while working', type: 'toggle' },
   ],
 };
 
@@ -373,6 +379,31 @@ function widgetPage() {
     { type: 'button', label: 'Hide all widgets', desc: 'Close every widget', btn: 'Hide All', action: () => { Object.keys(state.widgets).forEach((t) => { if (state.open[t]) window.api.toggleWidget(t); }); } },
     { type: 'button', label: 'Auto-arrange widgets', desc: 'Tidy every open widget into the grid according to size and priority', btn: 'Arrange Now', action: () => window.api.arrange() },
     { type: 'button', label: 'Reset widget layout', desc: 'Clear saved positions and re-arrange from scratch', btn: 'Reset Layout', action: () => { window.api.setSetting('widgetLayout', {}); setTimeout(() => window.api.arrange(), 200); } },
+    { type: 'button', label: 'Export layout', desc: 'Save current widget positions as a preset file', btn: 'Export', action: () => {
+      try {
+        const layout = state.widgetLayout || {};
+        const open = Object.keys(state.open || {}).filter((t) => state.open[t]);
+        const blob = new Blob([JSON.stringify({ version: 1, layout, open, exported: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'salsaspotlight-layout.json'; a.click(); URL.revokeObjectURL(a.href);
+      } catch { /* export failed */ }
+    } },
+    { type: 'button', label: 'Import layout', desc: 'Load widget positions from a preset file', btn: 'Import', action: () => {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json';
+      inp.onchange = () => {
+        const f = inp.files[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = () => {
+          try {
+            const d = JSON.parse(r.result);
+            if (d.layout) window.api.setSetting('widgetLayout', d.layout);
+            if (d.open) Object.entries(d.open).forEach(([t, should]) => { if (should && !state.open[t]) window.api.toggleWidget(t); });
+            setTimeout(() => window.api.arrange(), 300);
+          } catch { alert('Invalid layout file'); }
+        };
+        r.readAsText(f);
+      };
+      inp.click();
+    } },
   ], 45));
   const h2 = document.createElement('h2');
   h2.textContent = 'Your widgets (right-click a widget to resize it)';

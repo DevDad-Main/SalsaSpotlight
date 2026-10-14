@@ -107,19 +107,19 @@ const DEFAULTS = {
     system: { graph: true, battery: true, info: true, gpu: true },
     specs: { host: true, user: true, os: true, cpu: true, gpu: true, ram: true, screen: true, ip: true, uptime: true, rig: true },
     calendar: { mondayFirst: true },
-    countdown: { title: 'New Year', date: '2027-01-01' },
+    countdown: { title: 'New Year', date: '2027-01-01', recur: 'none' },
     progress: { showYear: true, showDay: true, greeting: true },
     timer: { defaultMins: 25, sound: true },
     todo: { maxItems: 8 },
-    notes: { fontSize: 14 },
+    notes: { fontSize: 14, markdown: false },
     dock: { columns: 4, maxApps: 8 },
     clipboard: { maxItems: 12 },
-    gpu: { showVram: true, showTemp: true, showPower: true, showClock: false },
+    gpu: { showVram: true, showTemp: true, showPower: true, showClock: false, showFan: false },
     network: { showIface: true },
-    habits: { maxItems: 5 },
+    habits: { maxItems: 5, heatmap: true },
     uptime: { showSeconds: false },
     calendarEvents: { showPast: false, maxEvents: 6 },
-    pomodoro: { workMin: 25, breakMin: 5, longBreakMin: 15, sessionsBeforeLong: 4 },
+    pomodoro: { workMin: 25, breakMin: 5, longBreakMin: 15, sessionsBeforeLong: 4, focusMode: false },
   },
 };
 
@@ -742,12 +742,12 @@ function nvidiaPath() {
 let gpuCache = { t: 0, d: null };
 async function getGpuStats() {
   if (Date.now() - gpuCache.t < 1500) return gpuCache.d;
-  const row = lines(await runText(nvidiaPath(), ['--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.gr', '--format=csv,noheader,nounits'], 3000))[0];
+  const row = lines(await runText(nvidiaPath(), ['--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.gr,fan.speed', '--format=csv,noheader,nounits'], 3000))[0];
   let d = null;
   if (row) {
-    const [name, util, temp, memUsed, memTotal, power, clock] = row.split(',').map((s) => s.trim());
+    const [name, util, temp, memUsed, memTotal, power, clock, fan] = row.split(',').map((s) => s.trim());
     const n = (x) => { const v = Number(x); return Number.isFinite(v) ? v : null; };
-    d = { name, util: n(util), temp: n(temp), memUsed: n(memUsed), memTotal: n(memTotal), power: n(power), clock: n(clock) };
+    d = { name, util: n(util), temp: n(temp), memUsed: n(memUsed), memTotal: n(memTotal), power: n(power), clock: n(clock), fan: n(fan) };
   }
   gpuCache = { t: d ? Date.now() : Date.now() + 58500, d };
   return d;
