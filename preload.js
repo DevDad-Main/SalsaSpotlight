@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   copyPath: (p) => ipcRenderer.send('copy-path', p),
   showProps: (p) => ipcRenderer.send('show-props', p),
   forgetRecent: (p) => ipcRenderer.send('forget', p),
+  clearRecents: () => ipcRenderer.send('clear-recents'),
   reindex: () => ipcRenderer.send('reindex'),
   // shared state and settings
   getState: () => ipcRenderer.invoke('state'),

@@ -1347,6 +1347,15 @@ ipcMain.on('forget', (_e, p) => {
     broadcastState();
   }
 });
+ipcMain.on('clear-recents', () => {
+  const had = Object.keys(settings.usage).length > 0 || Object.keys(settings.qhist || {}).length > 0;
+  settings.usage = {};
+  settings.qhist = {};
+  if (had) {
+    saveSettings();
+    broadcastState();
+  }
+});
 ipcMain.on('reindex', () => { startIndex(); });
 ipcMain.handle('clip-get', () => clipHistory);
 ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(clipHistory[i]); });

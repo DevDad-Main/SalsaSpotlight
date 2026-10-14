@@ -11,6 +11,7 @@ const KEYS_HELP = [
   [['Ctrl', 'I'], 'Details panel'],
   [['Ctrl', 'R'], 'Rebuild search index'],
   [['Ctrl', 'Shift', 'R'], 'Remove item from recents'],
+  [['Ctrl', 'Shift', 'Delete'], 'Clear all recents'],
   [['↑', '↓', 'Tab'], 'Move selection'],
   [['Shift', 'Tab'], 'Move selection backwards'],
   [['?'], 'Show this shortcut list'],
@@ -332,6 +333,11 @@ function forgetRecent() {
   toast('Removed from recents');
   update();
 }
+function clearAllRecents() {
+  window.api.clearRecents();
+  toast('All recents cleared');
+  update();
+}
 function reindexNow() {
   window.api.reindex();
   toast('Reindexing…');
@@ -354,6 +360,7 @@ document.addEventListener('keydown', (e) => {
   }
   else if (ctrl && e.shiftKey && (e.key === 'C' || e.key === 'c')) { copyPath(); e.preventDefault(); }
   else if (ctrl && e.shiftKey && (e.key === 'R' || e.key === 'r')) { forgetRecent(); e.preventDefault(); }
+  else if (ctrl && e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) { clearAllRecents(); e.preventDefault(); }
   else if (ctrl && !e.shiftKey && (e.key === 'P' || e.key === 'p')) { showProps(); e.preventDefault(); }
   else if (ctrl && !e.shiftKey && (e.key === 'R' || e.key === 'r')) { reindexNow(); e.preventDefault(); }
   else if (ctrl && !e.shiftKey && (e.key === 'i' || e.key === 'I')) { setDetails(!detailsOpen); e.preventDefault(); }

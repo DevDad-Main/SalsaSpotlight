@@ -18,6 +18,7 @@ const SHORTCUTS = [
   ['Ctrl+I', 'Details panel'],
   ['Ctrl+R', 'Rebuild search index'],
   ['Ctrl+Shift+R', 'Remove item from recents'],
+  ['Ctrl+Shift+Delete', 'Clear all recents'],
   ['Up/Down/Tab', 'Move selection'],
   ['Shift+Tab', 'Move selection backwards'],
   ['?', 'Show shortcuts in Spotlight'],
@@ -79,6 +80,9 @@ const PAGES = {
       { key: 'search.web', label: 'Web search fallback', type: 'toggle' },
       { key: 'search.engine', label: 'Search engine', type: 'select', options: [['google', 'Google'], ['bing', 'Bing'], ['duckduckgo', 'DuckDuckGo'], ['brave', 'Brave']] },
       { key: 'indexEvery', label: 'App index updates', desc: 'How often the app list refreshes in the background', type: 'select', options: [[1, 'Every minute'], [3, 'Every 3 minutes'], [5, 'Every 5 minutes'], [10, 'Every 10 minutes']] },
+    ] },
+    { title: 'Recents', items: [
+      { type: 'button', label: 'Clear all recents', desc: 'Wipe usage history, frecency and query boosts - a clean slate', btn: 'Clear Recents', action: () => window.api.clearRecents() },
     ] },
   ] },
 };
