@@ -1066,9 +1066,14 @@ ipcMain.on('resize', (_e, h, w) => {
   launcherHeight = Math.max(70 + PAD() * 2, Math.min(Number(h) || 70, 860));
   if (win && win.isVisible()) {
     const width = Math.min(Math.max(winWidth(), Math.round(Number(w) || 0)), 1400);
+    const cur = win.getBounds();
     win.setContentSize(width, launcherHeight);
-    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-    win.setPosition(Math.round(d.x + (d.width - width) / 2), win.getPosition()[1]);
+    // Keep the spotlight bar exactly where it is — the details panel just
+    // extends to the right. Only nudge x if the panel would leave the screen.
+    const d = screen.getDisplayMatching(cur).workArea;
+    let x = cur.x;
+    if (x + width > d.x + d.width) x = Math.max(d.x, d.x + d.width - width);
+    win.setPosition(x, cur.y);
   }
 });
 ipcMain.on('hide', () => win.hide());
