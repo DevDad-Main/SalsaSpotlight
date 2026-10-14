@@ -80,7 +80,7 @@ const WIDGET_OPTS = {
   ],
   specs: [
     { key: 'gfnRig', label: 'GeForce NOW rig', desc: 'Auto-detect your tier, or force it if detection fails (overrides CPU/memory)', type: 'select', options: [
-      ['auto', 'Auto-detect'], ['3050b', '3050b / Free (RTX 3050)'], ['3060d', '3060d / Performance (RTX 3060)'], ['4080h', '4080h / Ultimate (RTX 4080)'], ['5080h', '5080h / Ultimate (RTX 5080)'],
+      ['auto', 'Auto-detect'], ['3050b', 'RTX 3050 (Free)'], ['3060d', 'RTX 3060 (Performance)'], ['4080h', 'RTX 4080 (Ultimate)'], ['5080h', 'RTX 5080 (Ultimate)'],
     ] },
     ['rig', 'GeForce NOW rig'], ['host', 'Device name'], ['user', 'User name'], ['os', 'Windows version'], ['cpu', 'Processor'], ['gpu', 'Graphics card'],
     ['ram', 'Memory'], ['screen', 'Display'], ['ip', 'IP address'], ['uptime', 'Uptime'],

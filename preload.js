@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('api', {
   setWidgetSize: (t, k) => ipcRenderer.send('set-size', t, k),
   arrange: () => ipcRenderer.send('arrange'),
   showTour: () => ipcRenderer.send('show-tour'),
+  tourClosed: () => ipcRenderer.send('tour-closed'),
   onShowTour: (cb) => ipcRenderer.on('show-tour', () => cb()),
   openSettings: () => ipcRenderer.send('open-settings'),
   onGoto: (cb) => ipcRenderer.on('goto', (_e, p) => cb(p)),

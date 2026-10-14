@@ -34,6 +34,8 @@
       const over = !!(el && el.closest && el.closest('.grid-stack-item'));
       window.api.setClickThrough(!over);
     } catch { try { window.api.setClickThrough(true); } catch { /* ignore */ } }
+    // Hand window z-order back to normal (main raised it for the tour)
+    try { window.api.tourClosed(); } catch { /* ignore */ }
     if (closeCb) { const c = closeCb; closeCb = null; c(); }
   };
 

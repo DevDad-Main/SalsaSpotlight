@@ -20,15 +20,21 @@
   const MIN_H = { clock: 3, specs: 7, calendar: 6, weather: 4, system: 5, timer: 5, pomodoro: 5 };
 
   // ── Grid setup ──
+  // The desktop window is sized to the work area (excludes taskbar), so all row math
+  // uses window.innerHeight — NOT window.screen.height (full display incl. taskbar).
+  function gridRows() {
+    const cellH = (grid && grid.opts.cellHeight) || 50;
+    return Math.max(4, Math.floor(window.innerHeight / cellH));
+  }
+
   function initGrid() {
-    const waW = window.screen.width;
-    const waH = window.screen.height;
-    const cols = Math.max(3, Math.min(8, Math.floor(waW / 400)));
-    const cellH = Math.round(waH / 22);
+    const cols = Math.max(3, Math.min(8, Math.floor(window.innerWidth / 400)));
+    const cellH = Math.max(30, Math.round(window.innerHeight / 22));
 
     grid = GridStack.init({
       column: cols,
       cellHeight: cellH,
+      maxRow: Math.floor(window.innerHeight / cellH),
       margin: 12,
       float: true,
       animate: true,
@@ -38,7 +44,7 @@
       removable: false,
     }, gridEl);
 
-    grid.on('change', () => { clampAllWidgets(); saveLayout(); });
+    grid.on('change', () => { if (!dragging) clampAllWidgets(); saveLayout(); });
     grid.on('dragstart', () => { dragging = true; window.api.setClickThrough(false); });
     grid.on('dragstop', (_e, el) => {
       dragging = false;
@@ -57,6 +63,15 @@
       if (!type || !instances[type] || !state) return;
       instances[type].inst.mount(state.prefs.widgetOpts[type], state.prefs);
       saveLayout();
+    });
+
+    // Resolution / taskbar changes — keep the row cap in sync and pull widgets back in
+    window.addEventListener('resize', () => {
+      if (!grid) return;
+      const rows = gridRows();
+      grid.opts.maxRow = rows;
+      if (grid.engine) grid.engine.maxRow = rows;
+      clampAllWidgets();
     });
   }
 
@@ -112,20 +127,19 @@
     delete instances[type];
   }
 
-  // Clamp a single widget to grid bounds
+  // Clamp a single widget to grid bounds (rows computed from the work-area window, not full screen)
   function clampWidget(el) {
     if (!grid || !el) return;
     const cols = grid.opts.column;
-    const cellH = grid.opts.cellHeight || 50;
-    const maxRows = Math.ceil(window.screen.height / cellH);
+    const maxRows = gridRows();
     let x = parseInt(el.getAttribute('gs-x') || 0);
     let y = parseInt(el.getAttribute('gs-y') || 0);
-    const w = parseInt(el.getAttribute('gs-w') || 1);
-    const h = parseInt(el.getAttribute('gs-h') || 1);
+    const w = Math.min(parseInt(el.getAttribute('gs-w') || 1), cols);
+    const h = Math.min(parseInt(el.getAttribute('gs-h') || 1), maxRows);
     const nx = Math.max(0, Math.min(x, cols - w));
     const ny = Math.max(0, Math.min(y, maxRows - h));
-    if (nx !== x || ny !== y) {
-      grid.update(el, { x: nx, y: ny }, false);
+    if (nx !== x || ny !== y || w !== parseInt(el.getAttribute('gs-w') || 1) || h !== parseInt(el.getAttribute('gs-h') || 1)) {
+      grid.update(el, { x: nx, y: ny, w, h }, false);
     }
   }
 
@@ -188,7 +202,7 @@
       else if (shouldBeOpen && isOpen) instances[type].inst.setState(s);
     }
 
-    if (!prev && s.widgetLayout) loadLayout(s.widgetLayout);
+    if (!prev && s.widgetLayout) { loadLayout(s.widgetLayout); clampAllWidgets(); }
 
     // Apply widget gap from prefs — gridstack uses --gs-item-margin-* on the grid element
     if (typeof s.prefs.widgetGap === 'number') {
@@ -236,90 +250,61 @@
     }
   }, { passive: true });
 
-  // ── Organic auto-arrange based on anchor ──
+  // ── Auto-arrange: width-aware skyline packing, then align the whole block to the anchor ──
   function arrangeWidgets() {
     if (!grid || !state) return;
     const anchor = state.prefs.arrangeAnchor || 'top-right';
     const cols = grid.opts.column;
-    const isRight = anchor.includes('right');
-    const isBottom = anchor.includes('bottom');
+    const rows = gridRows();
+    const isRight = anchor.endsWith('right');
+    const isBottom = anchor.startsWith('bottom');
     const isCenter = anchor === 'center';
 
-    // Compute actual max rows from native screen resolution
-    const cellH = grid.opts.cellHeight || 50;
-    const screenRows = Math.floor(window.screen.height / cellH);
-
-    // Collect open widgets
     const widgets = Object.entries(instances).map(([type, { item }]) => ({
-      type,
       item,
-      h: parseInt(item.getAttribute('gs-h') || DEFAULT_H[type] || 4),
-      w: parseInt(item.getAttribute('gs-w') || 1),
+      w: Math.max(1, Math.min(cols, parseInt(item.getAttribute('gs-w') || 1))),
+      h: Math.max(1, parseInt(item.getAttribute('gs-h') || DEFAULT_H[type] || 4)),
     }));
-
     if (!widgets.length) return;
 
-    // Sort by height descending — tall widgets anchor columns
-    widgets.sort((a, b) => b.h - a.h);
+    // Tallest first so anchor columns are stable, widest first within equal heights
+    widgets.sort((a, b) => b.h - a.h || b.w - a.w);
 
-    // Greedy bin packing into columns that fit the screen
-    const columns = [];
-    const getCol = (i) => {
-      while (columns.length <= i) columns.push({ items: [], totalH: 0 });
-      return columns[i];
-    };
-
+    // Place each widget on the lowest column band it fits (masonry, respects widths — no overlap)
+    const colH = new Array(cols).fill(0);
+    const placed = [];
     for (const w of widgets) {
-      let bestCol = -1;
-      let bestHeight = Infinity;
-      // Try existing columns first — must fit on screen with a gap
-      for (let c = 0; c < Math.min(cols, columns.length); c++) {
-        const col = getCol(c);
-        if (col.totalH + 1 + w.h <= screenRows && col.totalH < bestHeight) {
-          bestHeight = col.totalH;
-          bestCol = c;
-        }
+      let fitX = -1, fitBase = Infinity, bestX = 0, bestBase = Infinity;
+      for (let x = 0; x + w.w <= cols; x++) {
+        let base = 0;
+        for (let i = 0; i < w.w; i++) base = Math.max(base, colH[x + i]);
+        if (base < bestBase) { bestBase = base; bestX = x; }
+        if (base + w.h <= rows && base < fitBase) { fitBase = base; fitX = x; }
       }
-      // New column if all existing would overflow
-      if (bestCol === -1) bestCol = Math.min(cols, columns.length);
-      const col = getCol(bestCol);
-      col.items.push(w);
-      col.totalH += w.h + 1;
+      const x = fitX >= 0 ? fitX : bestX;
+      const base = fitX >= 0 ? fitBase : bestBase;
+      for (let i = 0; i < w.w; i++) colH[x + i] = base + w.h + 1;
+      placed.push({ ...w, x, y: base });
     }
 
-    // Drop columns beyond screen width
-    const usedCols = columns.filter((c) => c.items.length > 0).slice(0, cols);
+    // Align the packed block as a whole so anchors actually look anchored
+    const minX = Math.min(...placed.map((p) => p.x));
+    const maxRight = Math.max(...placed.map((p) => p.x + p.w));
+    const minY = Math.min(...placed.map((p) => p.y));
+    const maxBottom = Math.max(...placed.map((p) => p.y + p.h));
+    let dx = 0, dy = 0;
+    if (isCenter) dx = Math.floor((cols - (maxRight - minX)) / 2) - minX;
+    else if (isRight) dx = cols - maxRight;
+    else dx = -minX;
+    if (isCenter) dy = Math.floor((rows - (maxBottom - minY)) / 2) - minY;
+    else if (isBottom) dy = rows - maxBottom;
+    else dy = -minY;
 
-    // Compute starting column based on anchor
-    let startCol = 0;
-    if (isCenter) startCol = Math.max(0, Math.floor((cols - usedCols.length) / 2));
-    else if (isRight) startCol = Math.max(0, cols - usedCols.length);
-
-    // Place widgets
-    let colIndex = startCol;
-    for (const col of usedCols) {
-      // Stack vertically
-      let y = isBottom ? Math.max(0, screenRows - col.totalH) : 0;
-      const positions = [];
-      for (const w of col.items) {
-        // Clamp y so widget never exceeds screen
-        if (y + w.h > screenRows) y = Math.max(0, screenRows - w.h);
-        positions.push({ item: w.item, y, h: w.h });
-        y += w.h + 1;
-      }
-
-      // Bottom anchor: flip so stack grows upward
-      if (isBottom) {
-        const maxY = Math.max(...positions.map((p) => p.y + p.h));
-        for (const p of positions) {
-          p.y = Math.max(0, Math.min(screenRows - p.h, maxY - p.y - p.h));
-        }
-      }
-
-      for (const p of positions) {
-        grid.update(p.item, { x: colIndex, y: p.y }, false);
-      }
-      colIndex++;
+    for (const p of placed) {
+      grid.update(p.item, {
+        x: Math.max(0, Math.min(cols - p.w, p.x + dx)),
+        y: Math.max(0, Math.min(rows - p.h, p.y + dy)),
+      }, false);
     }
 
     // Final safety clamp

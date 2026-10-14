@@ -129,7 +129,7 @@ const DEFAULTS = {
 };
 
 let win, tray, settingsWin, desktopWin, quitting = false;
-let pendingTour = false;
+let pendingTour = false, tourOpen = false;
 let items = [];
 let openWidgets = new Set();       // widget types currently shown on desktop
 let settings = { usage: {}, widgets: {} };
@@ -449,7 +449,7 @@ const shouldShow = () => {
 function applyVisibility() {
   if (!desktopWin || desktopWin.isDestroyed()) return;
   const show = shouldShow();
-  desktopWin.setAlwaysOnTop(topMost());
+  desktopWin.setAlwaysOnTop(topMost() || tourOpen, tourOpen ? 'screen-saver' : undefined);
   clearTimeout(desktopWin.__hide);
   if (show) {
     if (!desktopWin.isVisible()) desktopWin.showInactive();
@@ -468,6 +468,15 @@ function flash(ms) {
   flashTimer = setTimeout(() => { flashing = false; applyVisibility(); }, ms);
 }
 
+function sendShowTour() {
+  if (!desktopWin || desktopWin.isDestroyed()) return;
+  tourOpen = true;
+  if (!desktopWin.isVisible()) desktopWin.showInactive();
+  desktopWin.setAlwaysOnTop(true, 'screen-saver'); // lift above open windows so the tour is visible
+  desktopWin.moveTop();
+  desktopWin.webContents.send('show-tour');
+}
+
 function createDesktopWindow() {
   const d = screen.getPrimaryDisplay();
   const wa = d.workArea;
@@ -484,7 +493,7 @@ function createDesktopWindow() {
   desktopWin.once('ready-to-show', () => {
     desktopWin.__ready = true;
     applyVisibility();
-    if (pendingTour || prefs.showTour) { pendingTour = false; setTimeout(() => { if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('show-tour'); }, 700); }
+    if (pendingTour || prefs.showTour) { pendingTour = false; setTimeout(sendShowTour, 700); }
   });
   desktopWin.on('closed', () => { desktopWin = null; });
 }
@@ -637,16 +646,17 @@ const EPYC = 'AMD EPYC 9375F 32-Core (Zen5)';
 // GFN rigs: match overlay names (RTX 3050 etc) AND physical GPU codenames (L40G/L40S/B40).
 // Codenames alone are ambiguous (L40G exists on 3050/3060/4080) — VRAM disambiguates.
 const GFN_RIGS = [
-  { key: '3050b', match: /RTX 3050|Basic Rig/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
-  { key: '3060d', match: /RTX 3060/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { key: '4080h', match: /RTX 4080/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
-  { key: '5080h', match: /RTX 5080/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { key: '3050b', match: /RTX 3050|Basic Rig/i, vramGB: [6], rig: 'RTX 3050', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { key: '3060d', match: /RTX 3060/i, vramGB: [12], rig: 'RTX 3060', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '4080h', match: /RTX 4080/i, vramGB: [24], rig: 'RTX 4080', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { key: '5080h', match: /RTX 5080/i, vramGB: [48], rig: 'RTX 5080', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
   // Physical GPU codenames reported by Windows/nvidia-smi on GFN — disambiguated by VRAM
-  { key: '3050b', match: /L40[GS]?-?6|L40 6/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
-  { key: '3060d', match: /L40[GS]?-?12|L40 12|B40-?12/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { key: '3060d', match: /B40/i, vramGB: [12], rig: '3060d (RTX 3060, EPYC)', tier: 'Performance', cpu: EPYC, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { key: '4080h', match: /L40[GS]?(?!\d)/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
-  { key: '5080h', match: /B40/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { key: '3050b', match: /L40[GS]?-?6|L40 6/i, vramGB: [6], rig: 'RTX 3050', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { key: '3060d', match: /L40[GS]?-?12|L40 12|B40-?12/i, vramGB: [12], rig: 'RTX 3060', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '3060d', match: /B40/i, vramGB: [12], rig: 'RTX 3060', tier: 'Performance', cpu: EPYC, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '4080h', match: /L40[GS]?(?!\d)/i, vramGB: [24], rig: 'RTX 4080', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { key: '5080h', match: /L40[GS]?/i, vramGB: [48], rig: 'RTX 5080', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { key: '5080h', match: /B40/i, vramGB: [48], rig: 'RTX 5080', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
 ];
 const GFN_LOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log');
 
@@ -696,51 +706,78 @@ function getSpecs() {
   };
 }
 
-// Slower hardware detection — multiple sources, cached after the first success.
+// nvidia-smi: cleanest GPU name + VRAM. Tries every known install path (SalsaStats-style).
+async function smiQuery() {
+  const pf = process.env.ProgramW6432 || process.env.ProgramFiles;
+  const cands = [process.env.NVIDIA_SMI_PATH, pf && path.join(pf, 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'nvidia-smi.exe'), 'nvidia-smi.exe'].filter(Boolean);
+  for (const exe of [...new Set(cands)]) {
+    if (path.isAbsolute(exe) && !fs.existsSync(exe)) continue;
+    const out = lines(await runText(exe, ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 4000))[0];
+    if (out) {
+      const [n, mib] = out.split(',').map((s) => s.trim());
+      const m = Number(mib);
+      return { name: n || null, vramGB: m > 0 ? Math.round(m / 1024) : null };
+    }
+  }
+  return {};
+}
+
+// Slower hardware detection — all sources gathered in parallel (SalsaStats-style), cached after success.
 // Rig/CPU override only applies on GeForce NOW (or manual override) so local PCs show real specs.
 let hwPromise;
 function getHw() {
   hwPromise ||= (async () => {
     const manualKey = prefs.gfnRig && prefs.gfnRig !== 'auto' ? prefs.gfnRig : null;
-    let names = [], siVram = null, smiName = null, smiVramGB = null;
-    // 1) nvidia-smi — real GPU name + VRAM (most reliable when available)
-    try {
-      const out = lines(await runText(nvidiaPath(), ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 4000))[0];
-      if (out) {
-        const [n, mib] = out.split(',').map((s) => s.trim());
-        smiName = n || null;
-        const m = Number(mib);
-        if (m > 0) smiVramGB = Math.round(m / 1024);
-      }
-    } catch { /* nvidia-smi unavailable */ }
-    if (smiName && !VIRTUAL_GPU.test(smiName)) names.push(smiName);
-    // 2) systeminformation
-    try {
-      const si = require('systeminformation');
-      const g = await withTimeout(si.graphics(), 12000);
-      for (const x of (g.controllers || [])) {
-        const label = `${x.vendor || ''} ${x.model || ''}`;
-        if (x.model && !VIRTUAL_GPU.test(label)) names.push(x.model);
-        if (!siVram && x.vram) siVram = x.vram >= 1024 ? `${Math.round(x.vram / 1024)}GB` : `${x.vram}MB`;
-      }
-    } catch (e) { logError(e); }
-    // 3) PowerShell / WMIC fallback
-    if (!names.length) { try { names = await withTimeout(gpuNames(), 15000); } catch { names = []; } }
-    // 4) Electron GPU info — works even when WMI/PowerShell are blocked (GFN guests)
-    try {
-      const i = await app.getGPUInfoAsync('complete');
-      for (const d of (i.gpuDevice || [])) {
-        const s = d.deviceString || d.vendorString || '';
-        if (s && !VIRTUAL_GPU.test(s)) names.push(s);
-      }
-    } catch { /* electron gpu info unavailable */ }
-    names = [...new Set(names.filter(Boolean))];
-    const vramGB = smiVramGB || (siVram ? parseInt(siVram, 10) : null);
+    let si = null;
+    try { si = require('systeminformation'); } catch { /* systeminformation missing */ }
+    // 1) CPU brand (WMI — the registry string os.cpus() reads can be wrong/generic on GFN)
+    // 2) GPU controllers  3) nvidia-smi  4) PowerShell/WMIC (+ Electron fallback inside gpuNames)
+    const [siCpu, siGfx, smi, wmiNames] = await Promise.all([
+      si ? withTimeout(si.cpu(), 20000).catch(() => null) : Promise.resolve(null),
+      si ? withTimeout(si.graphics(), 30000).catch(() => null) : Promise.resolve(null),
+      smiQuery().catch(() => ({})),
+      withTimeout(gpuNames(), 15000).catch(() => []),
+    ]);
 
-    // GeForce NOW detection: streamer log OR physical GFN GPU codenames
+    // CPU: prefer systeminformation brand (same source SalsaStats uses), fall back to registry
+    let cpuLabel = null, physCores = null, totalCores = null;
+    if (siCpu) {
+      const brand = (siCpu.brand || '').trim();
+      const man = (siCpu.manufacturer || '').trim();
+      if (brand) cpuLabel = (man && !brand.toLowerCase().startsWith(man.toLowerCase())) ? `${man} ${brand}` : brand;
+      physCores = siCpu.physicalCores || null;
+      totalCores = siCpu.cores || null;
+    }
+    if (!cpuLabel) cpuLabel = (os.cpus()[0]?.model || '').replace(/\s+/g, ' ').trim() || null;
+
+    // GPU: pick best physical controller from si.graphics (telemetry + known vendor score, like SalsaStats)
+    let siName = null, siVram = null;
+    const controllers = (siGfx && Array.isArray(siGfx.controllers)) ? siGfx.controllers : [];
+    const physical = controllers.filter((c) => {
+      const label = [c.vendor, c.model, c.name].filter((v) => typeof v === 'string').join(' ');
+      return label && !VIRTUAL_GPU.test(label);
+    });
+    if (physical.length) {
+      const scored = physical.map((c, i) => {
+        const label = `${c.vendor || ''} ${c.model || ''} ${c.name || ''}`;
+        const hasT = [c.utilizationGpu, c.temperatureGpu, c.memoryTotal, c.memoryUsed, c.clockCore, c.powerDraw].some(Number.isFinite);
+        return { c, i, s: (hasT ? 100 : 0) + (/nvidia|amd|radeon|intel/i.test(label) ? 20 : 0) };
+      }).sort((a, b) => b.s - a.s || a.i - b.i);
+      const best = scored[0].c;
+      siName = best.model || best.name || null;
+      if (best.vram) siVram = best.vram >= 1024 ? `${Math.round(best.vram / 1024)}GB` : `${best.vram}MB`;
+    }
+
+    // Every non-virtual name found, pooled for rig matching (overlay names + physical codenames)
+    const names = [...new Set([smi.name, siName, ...(wmiNames || [])].filter((n) => n && !VIRTUAL_GPU.test(n)))];
+    const vramGB = smi.vramGB || (siVram ? parseInt(siVram, 10) : null);
+
+    // GeForce NOW detection: streamer log, physical GFN codenames, or server-class CPU (GFN exposes EPYC/Threadripper)
     let gfn = false;
     try { gfn = fs.statSync(GFN_LOG).size > 0; } catch { /* not a GeForce NOW session */ }
     if (!gfn && names.some((n) => /\bL40[GS]?\b|\bB40\b|\bA10G\b|\bA40\b|\bGRID\b/i.test(n))) gfn = true;
+    if (!gfn && /EPYC|Threadripper/i.test(cpuLabel || '')) gfn = true;
 
     // Rig resolution: manual override wins, otherwise auto only inside GFN sessions
     let rig = null;
@@ -748,16 +785,25 @@ function getHw() {
       rig = GFN_RIGS.find((r) => r.key === manualKey) || null;
       gfn = true;
     } else if (gfn) {
-      rig = GFN_RIGS.find((r) => names.some((n) => r.match.test(n)) && (!r.vramGB || !vramGB || r.vramGB.includes(vramGB)))
-        || GFN_RIGS.find((r) => names.some((n) => r.match.test(n)));
-      if (!rig && vramGB) {
+      // Name + VRAM exact match first (name-only counts when VRAM is unknown)
+      rig = GFN_RIGS.find((r) => names.some((n) => r.match.test(n)) && (!r.vramGB || !vramGB || r.vramGB.includes(vramGB)));
+      // VRAM-only fallback only when no consumer RTX name was seen (avoids mislabeling local 4090/5080)
+      if (!rig && vramGB && !names.some((n) => /RTX \d{4}/i.test(n))) {
         const byVram = { 6: '3050b', 12: '3060d', 24: '4080h', 48: '5080h' };
         rig = GFN_RIGS.find((r) => r.key === byVram[vramGB]) || null;
       }
     }
-    const vram = rig ? rig.vram : (smiVramGB ? `${smiVramGB}GB` : null) || siVram;
-    return { gpu: names, vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
-  })().then((r) => { if (!r.gpu.length && (!prefs.gfnRig || prefs.gfnRig === 'auto')) hwPromise = null; return r; });
+    const vram = rig ? rig.vram : (smi.vramGB ? `${smi.vramGB}GB` : null) || siVram;
+    // Display name: prefer a vendor-branded source, otherwise fall back to the known rig's GPU
+    const displayGpu = names.find((n) => /geforce|rtx|radeon|intel/i.test(n)) || names[0] || (rig ? rig.rig : null);
+    return {
+      gpu: displayGpu ? [displayGpu] : [], vram, rig, gfn,
+      cpu: rig ? rig.cpu : cpuLabel,
+      cores: rig ? rig.allocation : (physCores && totalCores ? `${physCores}C/${totalCores}T` : null),
+      ramLabel: rig ? rig.memory : null,
+    };
+  })().catch((e) => { logError(e); hwPromise = null; return { gpu: [], vram: null, rig: null, gfn: false }; })
+    .then((r) => { if (!r.gpu.length && (!prefs.gfnRig || prefs.gfnRig === 'auto')) hwPromise = null; return r; });
   return hwPromise;
 }
 
@@ -1059,7 +1105,12 @@ ipcMain.handle('net', async () => {
 ipcMain.on('drag-start', () => { /* gridstack handles drag internally */ });
 ipcMain.on('drag-end', () => { /* gridstack handles drop internally */ });
 ipcMain.on('arrange', () => { /* renderer handles arrange */ broadcastState(); });
-ipcMain.on('show-tour', () => { if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('show-tour'); });
+ipcMain.on('show-tour', sendShowTour);
+ipcMain.on('tour-closed', () => {
+  if (!desktopWin || desktopWin.isDestroyed()) return;
+  tourOpen = false;
+  applyVisibility(); // restores the normal topMost() state
+});
 ipcMain.on('set-size', (_e, t, k) => setWidgetSize(String(t), String(k)));
 ipcMain.on('widget-menu', (_e, type) => {
   const t = String(type);

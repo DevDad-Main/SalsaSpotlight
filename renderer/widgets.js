@@ -250,7 +250,7 @@ function createWidget(type, el, card, api) {
         api.specsGpu().then((h) => {
           if (tk !== mountSeq || !h) return;
           rigInfo = h.rig || null;
-          if (h.cpu) { const e = $('[data-k="i1"]', el); if (e) e.textContent = `${h.cpu} (${h.cores})`; }
+          if (h.cpu) { const e = $('[data-k="i1"]', el); if (e) e.textContent = `${h.cpu}${h.cores ? ` (${h.cores})` : ''}`; }
         }).catch(() => {});
       }
       const hist = Array(40).fill(0);
@@ -306,7 +306,7 @@ function createWidget(type, el, card, api) {
         if (tk !== mountSeq) return;
         const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
         // On GFN, show overlay name (RTX 3060) instead of physical codename (L40G)
-        const gpuLabel = s.rig ? `${s.rig.rig.replace(/\s*\(.*\)/, '')} (${s.rig.tier})` : null;
+        const gpuLabel = s.rig ? `${s.rig.rig} (${s.rig.tier})` : null;
         const gpuText = s.gpu === undefined ? 'Detecting...'
           : gpuLabel ? `${gpuLabel}${s.vram ? ` | ${s.vram} VRAM` : ''}`
           : (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '');
