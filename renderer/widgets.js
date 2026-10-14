@@ -244,9 +244,14 @@ function createWidget(type, el, card, api) {
         + (o.info ? `<div class="rows">${row(1, lucide('cpu', 'ri-svg', 16), 'Processor')}${row(2, lucide('memory', 'ri-svg', 16), 'Memory')}${o.gpu ? row(3, lucide('gpu', 'ri-svg', 16), 'Graphics', true) : ''}</div>` : '')
         + '<div class="foot" data-k="f"></div>';
       const tk = mountSeq;
+      let rigInfo = null;
       if (o.info) {
         api.specs().then((sp) => { if (tk === mountSeq) { const e = $('[data-k="i1"]', el); if (e) e.textContent = `${sp.cpu} (${sp.cores})`; } }).catch(() => {});
-        api.specsGpu().then((h) => { if (tk === mountSeq && h && h.cpu) { const e = $('[data-k="i1"]', el); if (e) e.textContent = `${h.cpu} (${h.cores})`; } }).catch(() => {});
+        api.specsGpu().then((h) => {
+          if (tk !== mountSeq || !h) return;
+          rigInfo = h.rig || null;
+          if (h.cpu) { const e = $('[data-k="i1"]', el); if (e) e.textContent = `${h.cpu} (${h.cores})`; }
+        }).catch(() => {});
       }
       const hist = Array(40).fill(0);
       const tick = async () => {
@@ -269,7 +274,9 @@ function createWidget(type, el, card, api) {
                 if (o.info) {
                   const r3 = $('[data-k="r3"]', el); if (r3) r3.hidden = false;
                   const vr = g.memUsed != null && g.memTotal ? ` | ${(g.memUsed / 1024).toFixed(1)}/${(g.memTotal / 1024).toFixed(0)} GB` : '';
-                  const i3 = $('[data-k="i3"]', el); if (i3) i3.textContent = `${g.name || 'GPU'}${vr}${g.temp != null ? ` | ${g.temp}°C` : ''}`;
+                  // Prefer rig overlay name (RTX 3060) over physical codename (L40G)
+                  const gname = rigInfo ? rigInfo.rig : (g.name || 'GPU');
+                  const i3 = $('[data-k="i3"]', el); if (i3) i3.textContent = `${gname}${vr}${g.temp != null ? ` | ${g.temp}°C` : ''}`;
                 }
               }
             } catch { /* optional gpu */ }
@@ -298,7 +305,11 @@ function createWidget(type, el, card, api) {
       const draw = (s) => {
         if (tk !== mountSeq) return;
         const up = `${Math.floor(s.uptime / 86400)}d ${Math.floor(s.uptime / 3600) % 24}h ${Math.floor(s.uptime / 60) % 60}m`;
-        const gpuText = s.gpu === undefined ? 'Detecting...' : (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '');
+        // On GFN, show overlay name (RTX 3060) instead of physical codename (L40G)
+        const gpuLabel = s.rig ? `${s.rig.rig.replace(/\s*\(.*\)/, '')} (${s.rig.tier})` : null;
+        const gpuText = s.gpu === undefined ? 'Detecting...'
+          : gpuLabel ? `${gpuLabel}${s.vram ? ` | ${s.vram} VRAM` : ''}`
+          : (s.gpu.join(' + ') || 'Unknown') + (s.vram ? ` (${s.vram})` : '');
         const rows = [
           ['rig', 'GeForce NOW rig', lucide('cloud', 'ri-svg', 16), s.rig ? `${s.rig.rig} - ${s.rig.tier}` : s.gfn ? 'GeForce NOW session' : null],
           ['host', 'Device', lucide('laptop', 'ri-svg', 16), s.host],

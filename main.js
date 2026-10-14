@@ -614,15 +614,22 @@ function clipTimerSet() {
 }
 
 // ---------- system info ----------
-let staticSpecs;
 const VIRTUAL_GPU = /microsoft basic display adapter|vnc mirror driver|virtual|remote display|indirect display/i;
 const TR_PRO = 'AMD Ryzen Threadripper PRO 5955WX 16-Core (Zen3)';
 const EPYC = 'AMD EPYC 9375F 32-Core (Zen5)';
+// GFN rigs: match overlay names (RTX 3050 etc) AND physical GPU codenames (L40G/L40S/B40).
+// Codenames alone are ambiguous (L40G exists on 3050/3060/4080) — VRAM disambiguates.
 const GFN_RIGS = [
-  { match: /RTX 3050/i, rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
-  { match: /RTX 3060/i, rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { match: /RTX 5080/i, rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
-  { match: /RTX 4080/i, rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { match: /RTX 3050|Basic Rig/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { match: /RTX 3060/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { match: /RTX 4080/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { match: /RTX 5080/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  // Physical GPU codenames reported by Windows/nvidia-smi on GFN — disambiguated by VRAM
+  { match: /L40[GS]?-?6|L40 6/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { match: /L40[GS]?-?12|L40 12|B40-?12/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { match: /B40/i, vramGB: [12], rig: '3060d (RTX 3060, EPYC)', tier: 'Performance', cpu: EPYC, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { match: /L40[GS]?(?!\d)/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { match: /B40/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
 ];
 const GFN_LOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log');
 
@@ -676,7 +683,18 @@ function getSpecs() {
 let hwPromise;
 function getHw() {
   hwPromise ||= (async () => {
-    let gpu = [], siVram = null;
+    let gpu = [], siVram = null, smiName = null, smiVramGB = null;
+    // Get VRAM + real GPU name from nvidia-smi first (most reliable on GFN)
+    try {
+      const exe = nvidiaPath();
+      const out = lines(await runText(exe, ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 4000))[0];
+      if (out) {
+        const [n, mib] = out.split(',').map((s) => s.trim());
+        smiName = n || null;
+        const m = Number(mib);
+        if (m > 0) smiVramGB = Math.round(m / 1024);
+      }
+    } catch { /* nvidia-smi unavailable */ }
     try {
       const si = require('systeminformation');
       const g = await withTimeout(si.graphics(), 12000);
@@ -686,11 +704,27 @@ function getHw() {
       if (v) siVram = v.vram >= 1024 ? `${Math.round(v.vram / 1024)}GB` : `${v.vram}MB`;
     } catch (e) { logError(e); }
     if (!gpu.length) { try { gpu = await withTimeout(gpuNames(), 15000); } catch { gpu = []; } }
-    const rig = GFN_RIGS.find((r) => gpu.some((n) => r.match.test(n))) || null;
+    // Include nvidia-smi name in the match pool (it reports the true GPU on GFN)
+    const names = smiName && !gpu.includes(smiName) ? [smiName, ...gpu] : gpu;
+    // Determine VRAM in GB for disambiguation (from nvidia-smi)
+    const vramGB = smiVramGB;
+    // Match rig: prefer name regex + VRAM, fall back to name alone
+    let rig = GFN_RIGS.find((r) => names.some((n) => r.match.test(n)) && (!r.vramGB || !vramGB || r.vramGB.includes(vramGB)))
+      || GFN_RIGS.find((r) => names.some((n) => r.match.test(n)));
+    // VRAM-only fallback when name has no useful match (e.g. "NVIDIA Adapter")
+    if (!rig && vramGB) {
+      const byVram = GFN_RIGS.filter((r) => r.vramGB && r.vramGB.includes(vramGB));
+      rig = byVram[0] || null;
+    }
     let gfn = false;
     try { gfn = fs.statSync(GFN_LOG).size > 0; } catch { /* not a GeForce NOW session */ }
-    const vram = rig ? rig.vram : (await gpuVram().catch(() => null)) || siVram;
-    return { gpu, vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
+    // If GFN detected but no rig matched, infer from VRAM alone
+    if (!rig && gfn && vramGB) {
+      const byVram = { 6: GFN_RIGS[0], 12: GFN_RIGS[1], 24: GFN_RIGS[3], 48: GFN_RIGS[4] };
+      rig = byVram[vramGB] || null;
+    }
+    const vram = rig ? rig.vram : (smiVramGB ? `${smiVramGB}GB` : null) || siVram;
+    return { gpu: names.length ? names : (smiName ? [smiName] : []), vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
   })().then((r) => { if (!r.gpu.length) hwPromise = null; return r; });
   return hwPromise;
 }
