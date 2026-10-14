@@ -190,16 +190,22 @@
 
     if (!prev && s.widgetLayout) loadLayout(s.widgetLayout);
 
-    // Apply widget gap from prefs — set gridstack CSS vars directly for live updates
+    // Apply widget gap from prefs — gridstack uses --gs-item-margin-* on the grid element
     if (typeof s.prefs.widgetGap === 'number') {
       const g = s.prefs.widgetGap + 'px';
-      document.documentElement.style.setProperty('--gs-item-margin-top', g);
-      document.documentElement.style.setProperty('--gs-item-margin-right', g);
-      document.documentElement.style.setProperty('--gs-item-margin-bottom', g);
-      document.documentElement.style.setProperty('--gs-item-margin-left', g);
+      const gs = gridEl;
+      gs.style.setProperty('--gs-item-margin-top', g);
+      gs.style.setProperty('--gs-item-margin-right', g);
+      gs.style.setProperty('--gs-item-margin-bottom', g);
+      gs.style.setProperty('--gs-item-margin-left', g);
       if (grid) {
         grid.opts.margin = s.prefs.widgetGap;
         try { grid.margin(s.prefs.widgetGap); } catch {}
+        // Re-apply after grid.margin() since it may overwrite
+        gs.style.setProperty('--gs-item-margin-top', g);
+        gs.style.setProperty('--gs-item-margin-right', g);
+        gs.style.setProperty('--gs-item-margin-bottom', g);
+        gs.style.setProperty('--gs-item-margin-left', g);
       }
     }
 
@@ -239,7 +245,11 @@
     const isBottom = anchor.includes('bottom');
     const isCenter = anchor === 'center';
 
-    // Collect open widgets with their heights
+    // Compute actual max rows from native screen resolution
+    const cellH = grid.opts.cellHeight || 50;
+    const screenRows = Math.floor(window.screen.height / cellH);
+
+    // Collect open widgets
     const widgets = Object.entries(instances).map(([type, { item }]) => ({
       type,
       item,
@@ -247,85 +257,73 @@
       w: parseInt(item.getAttribute('gs-w') || 1),
     }));
 
+    if (!widgets.length) return;
+
     // Sort by height descending — tall widgets anchor columns
     widgets.sort((a, b) => b.h - a.h);
 
-    // Build columns: pack widgets into columns, trying to balance heights
+    // Greedy bin packing into columns that fit the screen
     const columns = [];
     const getCol = (i) => {
       while (columns.length <= i) columns.push({ items: [], totalH: 0 });
       return columns[i];
     };
 
-    // Greedy bin packing: place each widget in the shortest column
     for (const w of widgets) {
-      // Find shortest column that has room
-      let bestCol = 0;
+      let bestCol = -1;
       let bestHeight = Infinity;
-      for (let c = 0; c < Math.min(cols, columns.length + 1); c++) {
+      // Try existing columns first — must fit on screen with a gap
+      for (let c = 0; c < Math.min(cols, columns.length); c++) {
         const col = getCol(c);
-        if (col.totalH + w.h <= 20) { // max rows per column
-          if (col.totalH < bestHeight) { bestHeight = col.totalH; bestCol = c; }
+        if (col.totalH + 1 + w.h <= screenRows && col.totalH < bestHeight) {
+          bestHeight = col.totalH;
+          bestCol = c;
         }
       }
-      // If no column has room, use shortest
-      if (bestHeight === Infinity) {
-        bestCol = columns.reduce((min, c, i) => c.totalH < columns[min].totalH ? i : min, 0);
-      }
+      // New column if all existing would overflow
+      if (bestCol === -1) bestCol = Math.min(cols, columns.length);
       const col = getCol(bestCol);
       col.items.push(w);
       col.totalH += w.h + 1;
     }
 
-    // Assign positions based on anchor
-    const usedCols = columns.filter((c) => c.items.length > 0).length;
-    const startCol = isRight ? Math.max(0, cols - usedCols) : 0;
+    // Drop columns beyond screen width
+    const usedCols = columns.filter((c) => c.items.length > 0).slice(0, cols);
 
+    // Compute starting column based on anchor
+    let startCol = 0;
+    if (isCenter) startCol = Math.max(0, Math.floor((cols - usedCols.length) / 2));
+    else if (isRight) startCol = Math.max(0, cols - usedCols.length);
+
+    // Place widgets
     let colIndex = startCol;
-    for (const col of columns) {
-      if (!col.items.length) { colIndex++; continue; }
-
-      // Stack items vertically in this column
-      let y = 0;
+    for (const col of usedCols) {
+      // Stack vertically
+      let y = isBottom ? Math.max(0, screenRows - col.totalH) : 0;
       const positions = [];
       for (const w of col.items) {
+        // Clamp y so widget never exceeds screen
+        if (y + w.h > screenRows) y = Math.max(0, screenRows - w.h);
         positions.push({ item: w.item, y, h: w.h });
         y += w.h + 1;
       }
 
-      // For bottom anchor, flip vertically
+      // Bottom anchor: flip so stack grows upward
       if (isBottom) {
         const maxY = Math.max(...positions.map((p) => p.y + p.h));
         for (const p of positions) {
-          p.y = maxY - p.y - p.h;
+          p.y = Math.max(0, Math.min(screenRows - p.h, maxY - p.y - p.h));
         }
       }
 
-      // Apply positions
       for (const p of positions) {
         grid.update(p.item, { x: colIndex, y: p.y }, false);
       }
       colIndex++;
     }
 
-    // Center: shift everything to center
-    if (isCenter) {
-      const items = Object.values(instances).map(({ item }) => item);
-      if (items.length) {
-        const minX = Math.min(...items.map((i) => parseInt(i.getAttribute('gs-x') || 0)));
-        const maxX = Math.max(...items.map((i) => parseInt(i.getAttribute('gs-x') || 0) + parseInt(i.getAttribute('gs-w') || 1)));
-        const blockW = maxX - minX;
-        const offset = Math.floor((cols - blockW) / 2) - minX;
-        if (offset !== 0) {
-          for (const item of items) {
-            const x = parseInt(item.getAttribute('gs-x') || 0);
-            grid.update(item, { x: x + offset }, false);
-          }
-        }
-      }
-    }
-
-    grid.compact();
+    // Final safety clamp
+    clampAllWidgets();
     saveLayout();
   }
 
