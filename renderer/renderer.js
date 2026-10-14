@@ -379,11 +379,22 @@ new ResizeObserver(() => {
   window.api.resize(Math.ceil(rect.height), Math.ceil(rect.width));
 }).observe(wrap);
 
+function washFrom(hex) {
+  try {
+    let h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const n = parseInt(h, 16);
+    if (Number.isNaN(n)) return 'rgba(139, 149, 255, 0.16)';
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.16)`;
+  } catch { return 'rgba(139, 149, 255, 0.16)'; }
+}
+
 function applyPrefs(p) {
   const r = document.documentElement.style;
   const eff = p.spotlightEffect || 'solid';
   const acrylic = eff === 'acrylic';
   r.setProperty('--accent', p.accent);
+  r.setProperty('--wash', washFrom(p.accent));
   r.setProperty('--lr', p.launcherRadius + 'px');
   r.setProperty('--lw', p.launcherWidth + 'px');
   r.setProperty('--ta', acrylic ? p.tint : 0.7 + p.tint * 0.28);
@@ -396,6 +407,8 @@ function applyPrefs(p) {
   document.body.classList.toggle('noanim', !p.animations);
   document.body.classList.remove('eff-solid', 'eff-acrylic', 'eff-mica', 'eff-glass', 'eff-frosted', 'eff-aurora');
   document.body.classList.add(`eff-${eff}`);
+  document.body.classList.remove('aur-accent', 'aur-amber', 'aur-emerald', 'aur-violet');
+  document.body.classList.add(`aur-${['accent', 'amber', 'emerald', 'violet'].includes(p.auroraColor) ? p.auroraColor : 'accent'}`);
 }
 window.api.getState().then((s) => applyPrefs(s.prefs));
 window.api.onState((s) => applyPrefs(s.prefs));

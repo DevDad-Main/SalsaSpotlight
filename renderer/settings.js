@@ -47,6 +47,7 @@ const PAGES = {
     { title: 'Theme', items: [
       { key: 'spotlightEffect', label: 'Background effect', desc: 'Solid card, or blurred material effects', type: 'select', options: [['solid', 'Solid card'], ['acrylic', 'Acrylic (Windows blur)'], ['mica', 'Mica'], ['glass', 'Glass'], ['frosted', 'Frosted'], ['aurora', 'Aurora']] },
       { key: 'spotlightBlur', label: 'Blur strength', desc: 'How strong the background blur is', type: 'range', min: 20, max: 100, step: 5, fmt: (v) => v + '%' },
+      { key: 'auroraColor', label: 'Aurora colours', desc: 'Palette of the Aurora effect', type: 'select', options: [['accent', 'Follow accent colour'], ['amber', 'Amber'], ['emerald', 'Emerald'], ['violet', 'Violet']] },
       { key: 'theme', label: 'Theme', type: 'select', options: [['system', 'Match Windows'], ['dark', 'Dark'], ['light', 'Light']] },
       { key: 'accent', label: 'Accent colour', type: 'swatch' },
       { key: 'tint', label: 'Spotlight glass tint', desc: 'Lower is more see-through', type: 'range', min: 0.15, max: 0.9, step: 0.05, fmt: pct },

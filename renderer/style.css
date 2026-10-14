@@ -3,6 +3,7 @@
   --ta: 0.8;
   --pad: 18px;
   --ov: rgba(18, 18, 22, 0.96);
+  --wash: rgba(139, 149, 255, 0.16);
   --tint: rgba(30, 30, 34, var(--ta));
   --text: #f5f5f7;
   --muted: rgba(245, 245, 247, 0.55);
@@ -25,8 +26,8 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: transparent; overflow: hidden; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); user-select: none; }
-#wrap { padding: var(--pad); display: flex; gap: 14px; align-items: stretch; position: relative; }
-#app { width: var(--lw, 700px); flex: none; background: var(--tint); border-radius: var(--lr, 22px); overflow: hidden; backdrop-filter: blur(var(--sb, 40px)) saturate(180%); -webkit-backdrop-filter: blur(var(--sb, 40px)) saturate(180%); }
+#wrap { padding: var(--pad); display: flex; gap: 14px; align-items: stretch; position: relative; width: max-content; }
+#app { position: relative; width: var(--lw, 700px); flex: none; background: linear-gradient(var(--wash), var(--wash)), var(--tint); border-radius: var(--lr, 22px); overflow: hidden; backdrop-filter: blur(var(--sb, 40px)) saturate(180%); -webkit-backdrop-filter: blur(var(--sb, 40px)) saturate(180%); }
 body.rounded #app {
   border: 1px solid var(--edge);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.2);
@@ -84,24 +85,28 @@ kbd { background: var(--kbd); border-radius: 5px; padding: 1px 6px; margin-right
 li.row.sel .t .hl { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Spotlight background effects (Windhawk-inspired) */
-body.eff-mica #app { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--tint); }
+body.eff-mica #app { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), linear-gradient(var(--wash), var(--wash)), var(--tint); }
 body.eff-glass #app {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 42%), var(--tint);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 42%), linear-gradient(var(--wash), var(--wash)), var(--tint);
   backdrop-filter: blur(var(--sb, 40px)) saturate(220%) brightness(1.06);
   -webkit-backdrop-filter: blur(var(--sb, 40px)) saturate(220%) brightness(1.06);
 }
 body.eff-frosted #app {
-  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)), var(--tint);
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)), linear-gradient(var(--wash), var(--wash)), var(--tint);
   backdrop-filter: blur(calc(var(--sb, 40px) * 1.5)) saturate(140%);
   -webkit-backdrop-filter: blur(calc(var(--sb, 40px) * 1.5)) saturate(140%);
 }
-body.eff-aurora #app { background: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)), var(--tint); }
+body.eff-aurora #app { background: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)), linear-gradient(var(--wash), var(--wash)), var(--tint); }
 .aurora { position: absolute; inset: -30%; display: none; filter: blur(64px); opacity: 0.5; pointer-events: none; }
 body.eff-aurora .aurora { display: block; }
 .aurora i { position: absolute; width: 42%; aspect-ratio: 1 / 1; border-radius: 50%; }
-.aurora i:nth-child(1) { background: var(--accent); left: 2%; top: 6%; animation: aur 9s ease-in-out infinite alternate; }
-.aurora i:nth-child(2) { background: #2dd4bf; right: 4%; top: 28%; animation: aur 12s ease-in-out infinite alternate-reverse; }
-.aurora i:nth-child(3) { background: #e879f9; left: 38%; bottom: -8%; animation: aur 14s ease-in-out infinite alternate; }
+.aurora i:nth-child(1) { background: var(--a1, var(--accent)); left: 2%; top: 6%; animation: aur 9s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { background: var(--a2, #2dd4bf); right: 4%; top: 28%; animation: aur 12s ease-in-out infinite alternate-reverse; }
+.aurora i:nth-child(3) { background: var(--a3, #e879f9); left: 38%; bottom: -8%; animation: aur 14s ease-in-out infinite alternate; }
+body.aur-accent { --a1: var(--accent); --a2: #2dd4bf; --a3: #e879f9; }
+body.aur-amber { --a1: #ffb84d; --a2: #ff8a3d; --a3: #ffd97a; }
+body.aur-emerald { --a1: #34d399; --a2: #10b981; --a3: #a7f3d0; }
+body.aur-violet { --a1: #a78bfa; --a2: #8b5cf6; --a3: #d8b4fe; }
 @keyframes aur { from { transform: translate(0, 0) scale(1); } to { transform: translate(12%, -14%) scale(1.3); } }
 .bar, #list, #foot, #toast { position: relative; z-index: 1; }
 body.noanim .aurora i { animation: none !important; }
@@ -111,7 +116,7 @@ body.noanim .aurora i { animation: none !important; }
   display: none; width: 300px; flex: none;
   flex-direction: column; gap: 10px; padding: 16px;
   border: 1px solid var(--edge); border-radius: var(--lr, 22px);
-  background: var(--tint);
+  background: linear-gradient(var(--wash), var(--wash)), var(--tint);
   backdrop-filter: blur(var(--sb, 40px)) saturate(180%); -webkit-backdrop-filter: blur(var(--sb, 40px)) saturate(180%);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.2);
   overflow-y: auto; scrollbar-width: none;

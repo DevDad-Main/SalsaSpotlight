@@ -78,6 +78,7 @@ const DEFAULTS = {
   hotkey: 'Alt+Space',
   spotlightEffect: 'solid',
   spotlightBlur: 50,
+  auroraColor: 'accent',
   indexEvery: 10,
   peekKey: 'Alt+W',
   launchAtLogin: false,
