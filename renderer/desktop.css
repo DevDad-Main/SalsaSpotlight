@@ -76,3 +76,9 @@ body.hidden #grid { opacity: 0; pointer-events: none; }
 .tour-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: background 0.2s; }
 .tour-dots span.on { background: #8b95ff; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Tour: must capture clicks (body is pointer-events:none) */
+.tour { pointer-events: auto; }
+.tour-box { position: relative; }
+.tour-x { position: absolute; top: 12px; right: 14px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); font-size: 20px; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background 0.15s, color 0.15s; }
+.tour-x:hover { background: rgba(255,69,58,0.25); color: #ff453a; }

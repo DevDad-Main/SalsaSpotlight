@@ -941,6 +941,48 @@ function createWidget(type, el, card, api) {
       };
       every(draw, 60000);
     },
+
+    media(o) {
+      const showControls = o.controls !== false;
+      el.innerHTML = `${head('Now Playing')}`
+        + `<div class="med"><div class="mart" data-k="art">${lucide('music', '', 28)}</div>`
+        + `<div class="minfo"><b data-k="ti">Nothing playing</b><small data-k="ar">Play something in any app</small></div></div>`
+        + (showControls ? `<div class="btns med-ctrl"><button data-k="pv">${lucide('rotateCcw', '', 15)}</button><button class="main" data-k="tg">${lucide('play', '', 16)}</button><button data-k="nx">${lucide('play', '', 15)}</button></div>` : '')
+        + '<div class="foot" data-k="ap"></div>';
+      const PLAY_SVG = lucide('play', '', 16);
+      const PAUSE_SVG = lucide('pause', '', 16);
+      const PREV_SVG = lucide('rotateCcw', '', 15);
+      const NEXT_SVG = lucide('play', '', 15);
+      const tk = mountSeq;
+      let last = null;
+      const render = (d) => {
+        if (tk !== mountSeq) return;
+        const ti = $('[data-k="ti"]', el), ar = $('[data-k="ar"]', el), ap = $('[data-k="ap"]', el);
+        if (!ti) return;
+        if (!d || (!d.title && !d.app)) {
+          ti.textContent = 'Nothing playing';
+          ar.textContent = 'Play something in any app';
+          if (ap) ap.textContent = '';
+          const tg0 = $('[data-k="tg"]', el); if (tg0) tg0.innerHTML = PLAY_SVG;
+          last = null;
+          return;
+        }
+        ti.textContent = d.title || 'Unknown track';
+        ar.textContent = [d.artist, d.album].filter(Boolean).join(' — ') || 'Unknown artist';
+        const playing = d.status === 'Playing';
+        const tg = $('[data-k="tg"]', el); if (tg) tg.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+        const pv = $('[data-k="pv"]', el); if (pv) pv.disabled = d.canPrev === false;
+        const nx = $('[data-k="nx"]', el); if (nx) nx.disabled = d.canNext === false;
+        if (ap) ap.textContent = `${(d.app || '').split('.')[0].replace(/_/g, ' ')}${playing ? '' : ' — paused'}`;
+        last = d;
+      };
+      const refresh = async () => { if (tk !== mountSeq) return; try { render(await api.mediaInfo()); } catch { /* media unavailable */ } };
+      const pv = $('[data-k="pv"]', el); if (pv) pv.onclick = () => { api.mediaControl('prev'); setTimeout(refresh, 400); };
+      const tg = $('[data-k="tg"]', el); if (tg) tg.onclick = () => { api.mediaControl('toggle'); setTimeout(refresh, 400); };
+      const nx = $('[data-k="nx"]', el); if (nx) nx.onclick = () => { api.mediaControl('next'); setTimeout(refresh, 400); };
+      refresh();
+      every(refresh, 2000);
+    },
   };
 
   function mount(opts, prefs) {
@@ -958,7 +1000,8 @@ function createWidget(type, el, card, api) {
   function setState(s) {
     state = s;
     applyCss(s.prefs);
-    const key = JSON.stringify([s.prefs.widgetOpts[type], type === 'worldclock' ? s.prefs.widgetOpts.clock : null]);
+    const key = JSON.stringify([s.prefs.widgetOpts[type], type === 'worldclock' ? s.prefs.widgetOpts.clock : null,
+      (type === 'specs' || type === 'system') ? s.prefs.gfnRig : null]);
     if (key !== mountKey) { mountKey = key; mount(s.prefs.widgetOpts[type], s.prefs); }
   }
 

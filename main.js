@@ -62,6 +62,7 @@ const WIDGETS = {
   uptime: { title: 'System Uptime', size: [330, 160] },
   speedtest: { title: 'Speed Test', size: [330, 180] },
   calendarEvents: { title: 'Upcoming Events', size: [330, 260] },
+  media: { title: 'Now Playing', size: [330, 220] },
 };
 const SIZES = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
 const SIZE_LABELS = { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
@@ -92,6 +93,8 @@ const DEFAULTS = {
   launcherTop: 20,
   launcherShadow: false,
   arrangeAnchor: 'top-right',
+  showTour: false,
+  gfnRig: 'auto',
   tint: 0.45,
   animations: true,
   clipboard: true,
@@ -121,10 +124,12 @@ const DEFAULTS = {
     uptime: { showSeconds: false },
     calendarEvents: { showPast: false, maxEvents: 6 },
     pomodoro: { workMin: 25, breakMin: 5, longBreakMin: 15, sessionsBeforeLong: 4, focusMode: false },
+    media: { controls: true },
   },
 };
 
 let win, tray, settingsWin, desktopWin, quitting = false;
+let pendingTour = false;
 let items = [];
 let openWidgets = new Set();       // widget types currently shown on desktop
 let settings = { usage: {}, widgets: {} };
@@ -189,6 +194,7 @@ function onPref(key) {
   else if (key === 'launcherWidth') win.setContentSize(winWidth(), win.getContentSize()[1]);
   else if (key === 'clipboard') clipTimerSet();
   else if (key === 'launchAtLogin') app.setLoginItemSettings({ openAtLogin: !!prefs.launchAtLogin });
+  else if (key === 'gfnRig') hwPromise = undefined;
 }
 
 // ---------- indexing ----------
@@ -475,7 +481,11 @@ function createDesktopWindow() {
   desktopWin.setMenu(null);
   desktopWin.loadFile(path.join(__dirname, 'renderer', 'desktop.html'));
   desktopWin.on('blur', pinAll);
-  desktopWin.once('ready-to-show', () => { desktopWin.__ready = true; applyVisibility(); });
+  desktopWin.once('ready-to-show', () => {
+    desktopWin.__ready = true;
+    applyVisibility();
+    if (pendingTour || prefs.showTour) { pendingTour = false; setTimeout(() => { if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('show-tour'); }, 700); }
+  });
   desktopWin.on('closed', () => { desktopWin = null; });
 }
 
@@ -627,16 +637,16 @@ const EPYC = 'AMD EPYC 9375F 32-Core (Zen5)';
 // GFN rigs: match overlay names (RTX 3050 etc) AND physical GPU codenames (L40G/L40S/B40).
 // Codenames alone are ambiguous (L40G exists on 3050/3060/4080) — VRAM disambiguates.
 const GFN_RIGS = [
-  { match: /RTX 3050|Basic Rig/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
-  { match: /RTX 3060/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { match: /RTX 4080/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
-  { match: /RTX 5080/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { key: '3050b', match: /RTX 3050|Basic Rig/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { key: '3060d', match: /RTX 3060/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '4080h', match: /RTX 4080/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { key: '5080h', match: /RTX 5080/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
   // Physical GPU codenames reported by Windows/nvidia-smi on GFN — disambiguated by VRAM
-  { match: /L40[GS]?-?6|L40 6/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
-  { match: /L40[GS]?-?12|L40 12|B40-?12/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { match: /B40/i, vramGB: [12], rig: '3060d (RTX 3060, EPYC)', tier: 'Performance', cpu: EPYC, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
-  { match: /L40[GS]?(?!\d)/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
-  { match: /B40/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { key: '3050b', match: /L40[GS]?-?6|L40 6/i, vramGB: [6], rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { key: '3060d', match: /L40[GS]?-?12|L40 12|B40-?12/i, vramGB: [12], rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '3060d', match: /B40/i, vramGB: [12], rig: '3060d (RTX 3060, EPYC)', tier: 'Performance', cpu: EPYC, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { key: '4080h', match: /L40[GS]?(?!\d)/i, vramGB: [24], rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+  { key: '5080h', match: /B40/i, vramGB: [48], rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
 ];
 const GFN_LOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log');
 
@@ -686,15 +696,16 @@ function getSpecs() {
   };
 }
 
-// Slower hardware detection (systeminformation, then PowerShell/wmic), cached after the first success.
+// Slower hardware detection — multiple sources, cached after the first success.
+// Rig/CPU override only applies on GeForce NOW (or manual override) so local PCs show real specs.
 let hwPromise;
 function getHw() {
   hwPromise ||= (async () => {
-    let gpu = [], siVram = null, smiName = null, smiVramGB = null;
-    // Get VRAM + real GPU name from nvidia-smi first (most reliable on GFN)
+    const manualKey = prefs.gfnRig && prefs.gfnRig !== 'auto' ? prefs.gfnRig : null;
+    let names = [], siVram = null, smiName = null, smiVramGB = null;
+    // 1) nvidia-smi — real GPU name + VRAM (most reliable when available)
     try {
-      const exe = nvidiaPath();
-      const out = lines(await runText(exe, ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 4000))[0];
+      const out = lines(await runText(nvidiaPath(), ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 4000))[0];
       if (out) {
         const [n, mib] = out.split(',').map((s) => s.trim());
         smiName = n || null;
@@ -702,37 +713,51 @@ function getHw() {
         if (m > 0) smiVramGB = Math.round(m / 1024);
       }
     } catch { /* nvidia-smi unavailable */ }
+    if (smiName && !VIRTUAL_GPU.test(smiName)) names.push(smiName);
+    // 2) systeminformation
     try {
       const si = require('systeminformation');
       const g = await withTimeout(si.graphics(), 12000);
-      const ctl = (g.controllers || []).filter((x) => x.model && !VIRTUAL_GPU.test(`${x.vendor || ''} ${x.model}`));
-      gpu = ctl.map((x) => x.model);
-      const v = ctl.find((x) => x.vram);
-      if (v) siVram = v.vram >= 1024 ? `${Math.round(v.vram / 1024)}GB` : `${v.vram}MB`;
+      for (const x of (g.controllers || [])) {
+        const label = `${x.vendor || ''} ${x.model || ''}`;
+        if (x.model && !VIRTUAL_GPU.test(label)) names.push(x.model);
+        if (!siVram && x.vram) siVram = x.vram >= 1024 ? `${Math.round(x.vram / 1024)}GB` : `${x.vram}MB`;
+      }
     } catch (e) { logError(e); }
-    if (!gpu.length) { try { gpu = await withTimeout(gpuNames(), 15000); } catch { gpu = []; } }
-    // Include nvidia-smi name in the match pool (it reports the true GPU on GFN)
-    const names = smiName && !gpu.includes(smiName) ? [smiName, ...gpu] : gpu;
-    // Determine VRAM in GB for disambiguation (from nvidia-smi)
-    const vramGB = smiVramGB;
-    // Match rig: prefer name regex + VRAM, fall back to name alone
-    let rig = GFN_RIGS.find((r) => names.some((n) => r.match.test(n)) && (!r.vramGB || !vramGB || r.vramGB.includes(vramGB)))
-      || GFN_RIGS.find((r) => names.some((n) => r.match.test(n)));
-    // VRAM-only fallback when name has no useful match (e.g. "NVIDIA Adapter")
-    if (!rig && vramGB) {
-      const byVram = GFN_RIGS.filter((r) => r.vramGB && r.vramGB.includes(vramGB));
-      rig = byVram[0] || null;
-    }
+    // 3) PowerShell / WMIC fallback
+    if (!names.length) { try { names = await withTimeout(gpuNames(), 15000); } catch { names = []; } }
+    // 4) Electron GPU info — works even when WMI/PowerShell are blocked (GFN guests)
+    try {
+      const i = await app.getGPUInfoAsync('complete');
+      for (const d of (i.gpuDevice || [])) {
+        const s = d.deviceString || d.vendorString || '';
+        if (s && !VIRTUAL_GPU.test(s)) names.push(s);
+      }
+    } catch { /* electron gpu info unavailable */ }
+    names = [...new Set(names.filter(Boolean))];
+    const vramGB = smiVramGB || (siVram ? parseInt(siVram, 10) : null);
+
+    // GeForce NOW detection: streamer log OR physical GFN GPU codenames
     let gfn = false;
     try { gfn = fs.statSync(GFN_LOG).size > 0; } catch { /* not a GeForce NOW session */ }
-    // If GFN detected but no rig matched, infer from VRAM alone
-    if (!rig && gfn && vramGB) {
-      const byVram = { 6: GFN_RIGS[0], 12: GFN_RIGS[1], 24: GFN_RIGS[3], 48: GFN_RIGS[4] };
-      rig = byVram[vramGB] || null;
+    if (!gfn && names.some((n) => /\bL40[GS]?\b|\bB40\b|\bA10G\b|\bA40\b|\bGRID\b/i.test(n))) gfn = true;
+
+    // Rig resolution: manual override wins, otherwise auto only inside GFN sessions
+    let rig = null;
+    if (manualKey) {
+      rig = GFN_RIGS.find((r) => r.key === manualKey) || null;
+      gfn = true;
+    } else if (gfn) {
+      rig = GFN_RIGS.find((r) => names.some((n) => r.match.test(n)) && (!r.vramGB || !vramGB || r.vramGB.includes(vramGB)))
+        || GFN_RIGS.find((r) => names.some((n) => r.match.test(n)));
+      if (!rig && vramGB) {
+        const byVram = { 6: '3050b', 12: '3060d', 24: '4080h', 48: '5080h' };
+        rig = GFN_RIGS.find((r) => r.key === byVram[vramGB]) || null;
+      }
     }
     const vram = rig ? rig.vram : (smiVramGB ? `${smiVramGB}GB` : null) || siVram;
-    return { gpu: names.length ? names : (smiName ? [smiName] : []), vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
-  })().then((r) => { if (!r.gpu.length) hwPromise = null; return r; });
+    return { gpu: names, vram, rig, gfn, cpu: rig?.cpu, cores: rig?.allocation, ramLabel: rig?.memory };
+  })().then((r) => { if (!r.gpu.length && (!prefs.gfnRig || prefs.gfnRig === 'auto')) hwPromise = null; return r; });
   return hwPromise;
 }
 
@@ -758,6 +783,66 @@ async function getGpuStats() {
   }
   gpuCache = { t: d ? Date.now() : Date.now() + 58500, d };
   return d;
+}
+
+// ---------- media (Windows SMTC — works with YouTube, browsers, Spotify, etc) ----------
+const SMTC_GET = `
+$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null
+try {
+  $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
+  $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties, Windows.Media.Control, ContentType=WindowsRuntime]
+} catch { Write-Output '{}'; exit }
+$global:__asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } | Select-Object -First 1
+function AwaitOp($op, $type) {
+  try { $t = $global:__asTask.MakeGenericMethod($type).Invoke($null, @($op)); [void]$t.Wait(4000); if ($t.IsFaulted) { return $null }; return $t.Result } catch { return $null }
+}
+$mgr = AwaitOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+if (-not $mgr) { Write-Output '{}'; exit }
+$ses = $mgr.GetCurrentSession()
+if (-not $ses) { Write-Output '{}'; exit }
+$props = AwaitOp ($ses.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+$pb = $ses.GetPlaybackInfo()
+$o = @{ app = "$($ses.SourceAppUserModelId)"; status = "$($pb.PlaybackStatus)"; canPlay = [bool]$pb.IsPlayEnabled; canPause = [bool]$pb.IsPauseEnabled; canNext = [bool]$pb.IsNextEnabled; canPrev = [bool]$pb.IsPreviousEnabled }
+if ($props) { $o.title = "$($props.Title)"; $o.artist = "$($props.Artist)"; $o.album = "$($props.AlbumTitle)" }
+Write-Output ($o | ConvertTo-Json -Compress)
+`;
+const SMTC_CTRL = (action) => `
+$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null
+try { $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime] } catch { exit }
+$global:__asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' } | Select-Object -First 20
+$opM = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } | Select-Object -First 1
+function AwaitOp($op, $type) { try { $t = $opM.MakeGenericMethod($type).Invoke($null, @($op)); [void]$t.Wait(3000); return $t.Result } catch { return $null } }
+$actM = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' } | Select-Object -First 1
+function AwaitAct($a) { try { $t = $actM.Invoke($null, @($a)); [void]$t.Wait(3000) } catch { } }
+$mgr = AwaitOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+if (-not $mgr) { exit }
+$ses = $mgr.GetCurrentSession()
+if (-not $ses) { exit }
+switch ('${action}') {
+  'play' { AwaitAct $ses.TryPlayAsync() }
+  'pause' { AwaitAct $ses.TryPauseAsync() }
+  'toggle' { if ($ses.GetPlaybackInfo().PlaybackStatus -eq 'Playing') { AwaitAct $ses.TryPauseAsync() } else { AwaitAct $ses.TryPlayAsync() } }
+  'next' { AwaitAct $ses.TrySkipNextAsync() }
+  'prev' { AwaitAct $ses.TrySkipPreviousAsync() }
+}
+`;
+let mediaCache = { t: 0, d: null };
+async function getMediaInfo() {
+  if (Date.now() - mediaCache.t < 1500) return mediaCache.d;
+  const out = (await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', SMTC_GET], 5000)).trim();
+  let d = null;
+  if (out && out !== '{}') {
+    try { d = JSON.parse(out); } catch { d = null; }
+  }
+  mediaCache = { t: Date.now(), d: d || null };
+  return mediaCache.d;
+}
+async function mediaControl(action) {
+  if (!['play', 'pause', 'toggle', 'next', 'prev'].includes(action)) return;
+  await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', SMTC_CTRL(action)], 5000);
+  mediaCache = { t: 0, d: null };
 }
 
 let lastCpu = null;
@@ -962,6 +1047,8 @@ ipcMain.handle('stats', () => {
 ipcMain.handle('specs', () => getSpecs());
 ipcMain.handle('specs-gpu', () => getHw());
 ipcMain.handle('gpu-stats', () => getGpuStats());
+ipcMain.handle('media-info', () => getMediaInfo());
+ipcMain.on('media-control', (_e, a) => mediaControl(String(a)));
 ipcMain.handle('net', async () => {
   try {
     const r = await withTimeout(require('systeminformation').networkStats(), 3000);
@@ -972,6 +1059,7 @@ ipcMain.handle('net', async () => {
 ipcMain.on('drag-start', () => { /* gridstack handles drag internally */ });
 ipcMain.on('drag-end', () => { /* gridstack handles drop internally */ });
 ipcMain.on('arrange', () => { /* renderer handles arrange */ broadcastState(); });
+ipcMain.on('show-tour', () => { if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('show-tour'); });
 ipcMain.on('set-size', (_e, t, k) => setWidgetSize(String(t), String(k)));
 ipcMain.on('widget-menu', (_e, type) => {
   const t = String(type);
@@ -1142,6 +1230,7 @@ function registerKeys() {
 // ---------- lifecycle ----------
 app.whenReady().then(() => {
   const firstRun = !fs.existsSync(settingsFile());
+  pendingTour = firstRun;
   loadSettings();
   nativeTheme.themeSource = prefs.theme;
   createWindow();

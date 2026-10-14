@@ -20,6 +20,10 @@ const PAGES = {
     { title: 'Privacy', items: [
       { key: 'clipboard', label: 'Clipboard history', desc: 'Remembers copied text in memory only. Type "clip" in Spotlight. Cleared on quit.', type: 'toggle' },
     ] },
+    { title: 'Help', items: [
+      { key: 'showTour', label: 'Show welcome tour at startup', desc: 'Displays the 3-step intro each time SalsaSpotlight launches', type: 'toggle' },
+      { type: 'button', label: 'Need a refresher?', desc: 'Open the welcome tour now', btn: 'Show help', action: () => window.api.showTour() },
+    ] },
     { title: 'Reset', items: [{ type: 'button', label: 'Reset all settings', desc: 'Restore the defaults', btn: 'Reset', action: () => window.api.reset() }] },
   ] },
   appearance: { title: 'Appearance', icon: 'palette', groups: [
@@ -75,14 +79,19 @@ const WIDGET_OPTS = {
     { key: 'widgetOpts.system.gpu', label: 'GPU gauge', desc: 'NVIDIA GPUs only', type: 'toggle' },
   ],
   specs: [
+    { key: 'gfnRig', label: 'GeForce NOW rig', desc: 'Auto-detect your tier, or force it if detection fails (overrides CPU/memory)', type: 'select', options: [
+      ['auto', 'Auto-detect'], ['3050b', '3050b / Free (RTX 3050)'], ['3060d', '3060d / Performance (RTX 3060)'], ['4080h', '4080h / Ultimate (RTX 4080)'], ['5080h', '5080h / Ultimate (RTX 5080)'],
+    ] },
     ['rig', 'GeForce NOW rig'], ['host', 'Device name'], ['user', 'User name'], ['os', 'Windows version'], ['cpu', 'Processor'], ['gpu', 'Graphics card'],
     ['ram', 'Memory'], ['screen', 'Display'], ['ip', 'IP address'], ['uptime', 'Uptime'],
-  ].map(([k, l]) => ({ key: 'widgetOpts.specs.' + k, label: l, type: 'toggle' })),
+  ].map((r) => (r.key ? r : { key: 'widgetOpts.specs.' + r[0], label: r[1], type: 'toggle' })),
   calendar: [
     { key: 'widgetOpts.calendar.mondayFirst', label: 'Week starts on Monday', type: 'toggle' },
   ],
-  countdown: [
-    { key: 'widgetOpts.countdown.title', label: 'Event name', type: 'text' },
+  media: [
+    { key: 'widgetOpts.media.controls', label: 'Show playback controls', desc: 'Play/pause, previous and next buttons', type: 'toggle' },
+  ],
+  countdown: [    { key: 'widgetOpts.countdown.title', label: 'Event name', type: 'text' },
     { key: 'widgetOpts.countdown.date', label: 'Date', desc: 'Format YYYY-MM-DD', type: 'text' },
     { key: 'widgetOpts.countdown.recur', label: 'Repeat', desc: 'Recurring countdown for birthdays etc', type: 'select',
       options: [['none', 'Once'], ['yearly', 'Every year'], ['monthly', 'Every month'], ['weekly', 'Every week']] },

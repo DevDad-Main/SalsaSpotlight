@@ -222,7 +222,7 @@
   document.addEventListener('pointermove', (e) => {
     if (dragging) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    const onWidget = !!(el && el.closest && el.closest('.grid-stack-item'));
+    const onWidget = !!(el && el.closest && (el.closest('.grid-stack-item') || el.closest('.tour')));
     if (onWidget !== overWidget) {
       overWidget = onWidget;
       updateClickThrough();
@@ -230,7 +230,7 @@
   }, { passive: true });
 
   document.addEventListener('pointerdown', (e) => {
-    if (e.target.closest && e.target.closest('.grid-stack-item')) {
+    if (e.target.closest && (e.target.closest('.grid-stack-item') || e.target.closest('.tour'))) {
       overWidget = true;
       window.api.setClickThrough(false);
     }
