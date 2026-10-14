@@ -629,11 +629,13 @@ function createWidget(type, el, card, api) {
         if (!apps.length) { box.innerHTML = '<div class="wmsg" style="grid-column:1/-1">Apps you open from Spotlight will show up here.</div>'; return; }
         apps.forEach((a) => {
           const t = document.createElement('div');
-          t.className = 'tile';
-          t.innerHTML = '<img alt=""><span></span>';
+          t.className = 'tile' + (a.pinned ? ' pinned' : '');
+          t.innerHTML = `<img alt=""><span></span><button class="pin" title="Pin/Unpin">${lucide('target', '', 10)}</button>`;
           $('span', t).textContent = a.n;
-          t.title = a.n;
-          t.onclick = () => api.openPath(a.p);
+          t.title = a.n + (a.pinned ? ' (pinned)' : '');
+          t.onclick = (e) => { if (!e.target.closest('.pin')) api.openPath(a.p); };
+          const pinBtn = $('.pin', t);
+          if (pinBtn) pinBtn.onclick = (e) => { e.stopPropagation(); api.pinApp(a.p); };
           api.icon(a.p).then((u) => { if (u) { const img = $('img', t); if (img) img.src = u; } });
           box.append(t);
         });
@@ -965,6 +967,7 @@ function createWidget(type, el, card, api) {
     r.setProperty('--accent', p.accent);
     r.setProperty('--wo', p.widgetOpacity);
     r.setProperty('--radius', p.widgetRadius + 'px');
+    r.setProperty('--wcs', p.widgetContentScale || 1);
     document.body.classList.toggle('noanim', !p.animations);
     document.body.classList.toggle('noborder', !p.widgetBorder);
     document.body.classList.toggle('noshadow', !p.widgetShadow);

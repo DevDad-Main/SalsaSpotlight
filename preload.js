@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('api', {
   weather: (city, units) => ipcRenderer.invoke('weather', city, units),
   topApps: () => ipcRenderer.invoke('top-apps'),
   openPath: (p) => ipcRenderer.send('open-path', p),
+  pinApp: (p) => ipcRenderer.send('pin-app', p),
   clipGet: () => ipcRenderer.invoke('clip-get'),
   clipCopy: (i) => ipcRenderer.send('clip-copy', i),
   clipClear: () => ipcRenderer.send('clip-clear'),

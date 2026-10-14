@@ -477,3 +477,13 @@ body.noshadow .card { box-shadow: none; }
 /* ── Pomodoro focus mode ── */
 body.focus-mode .grid-stack-item:not(.w-pomodoro) { opacity: 0.15; pointer-events: none; transition: opacity 0.4s; }
 body.focus-mode .grid-stack-item.w-pomodoro { opacity: 1; z-index: 10; }
+
+/* ── Dock pin ── */
+.tile { position: relative; }
+.tile .pin { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; border: 0; background: var(--track); color: var(--muted); display: grid; place-items: center; opacity: 0; transition: opacity 0.15s; cursor: pointer; padding: 0; }
+.tile:hover .pin { opacity: 1; }
+.tile.pinned .pin { opacity: 0.7; background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
+.tile.pinned { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+/* ── Content scale ── */
+.card .content { transform: scale(var(--wcs, 1)); transform-origin: top left; width: calc(100% / var(--wcs, 1)); height: calc(100% / var(--wcs, 1)); }

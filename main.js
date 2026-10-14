@@ -83,6 +83,7 @@ const DEFAULTS = {
   widgetRadius: 28,
   widgetBorder: true,
   widgetShadow: true,
+  widgetContentScale: 1,
   snapToGrid: true,
   gridCollisions: true,
   autoScale: true,
@@ -218,7 +219,12 @@ function commandList(q = '') {
     { id: 'spawn', title: 'Show all widgets', sub: 'Open every widget at once', kw: 'all widgets show open enable everything' },
     { id: 'hideall', title: 'Hide all widgets', sub: 'Close every widget', kw: 'all widgets hide close disable clear' },
     { id: 'resetlayout', title: 'Reset widget layout', sub: 'Clear positions and re-arrange from scratch', kw: 'reset layout clear positions arrange tidy clean restart fresh' },
-    ...Object.entries(WIDGETS).map(([t, w]) => ({ id: 'w-' + t, title: `Toggle ${w.title}`, sub: 'Floating widget', kw: `widget toggle ${t} ${w.title.toLowerCase()}` })),
+    ...Object.entries(WIDGETS).map(([t, w]) => ({
+      id: 'w-' + t,
+      title: openWidgets.has(t) ? `Hide ${w.title}` : `Show ${w.title}`,
+      sub: openWidgets.has(t) ? 'Widget is open — click to close' : 'Widget is closed — click to open',
+      kw: `widget toggle ${t} ${w.title.toLowerCase()} ${openWidgets.has(t) ? 'hide close remove' : 'show open add'}`,
+    })),
     ...(/size|small|medium|large|big|tiny/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: `resize size widget ${t}` }))) : []),
     { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh rescan index rebuild' },
     { id: 'quit', title: 'Quit Spotlight', sub: 'Exit the launcher', kw: 'exit close quit shutdown' },
@@ -978,8 +984,24 @@ ipcMain.handle('disks', () => {
   return out;
 });
 ipcMain.handle('weather', (_e, city, units) => getWeather(String(city), units === 'f' ? 'f' : 'c'));
-ipcMain.handle('top-apps', () => Object.entries(settings.usage)
-  .filter(([, u]) => u.k >= 2).sort((a, b) => b[1].c - a[1].c).slice(0, 16).map(([p, u]) => ({ p, n: u.n })));
+ipcMain.handle('top-apps', () => {
+  const pinned = (settings.pinnedApps || []).map((p) => {
+    const u = settings.usage[p];
+    return u ? { p, n: u.n, pinned: true } : null;
+  }).filter(Boolean);
+  const recent = Object.entries(settings.usage)
+    .filter(([p, u]) => u.k >= 2 && !(settings.pinnedApps || []).includes(p))
+    .sort((a, b) => b[1].c - a[1].c).slice(0, 16).map(([p, u]) => ({ p, n: u.n }));
+  return [...pinned, ...recent];
+});
+ipcMain.on('pin-app', (_e, p) => {
+  const path = String(p);
+  if (!settings.pinnedApps) settings.pinnedApps = [];
+  const idx = settings.pinnedApps.indexOf(path);
+  if (idx >= 0) settings.pinnedApps.splice(idx, 1); else settings.pinnedApps.push(path);
+  saveSettings();
+  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('state', state());
+});
 ipcMain.on('open-path', (_e, p) => { if (settings.usage[p]) shell.openPath(p); });
 ipcMain.handle('clip-get', () => clipHistory);
 ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(clipHistory[i]); });

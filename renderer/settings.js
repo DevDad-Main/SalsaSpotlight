@@ -4,7 +4,7 @@ let state = null, page = 'general', controls = [], stateReady = false;
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
-const SWATCHES = ['#8b95ff', '#58b6ff', '#3ed6c0', '#5fd4a0', '#ffb35c', '#ff7a90', '#c084fc'];
+const SWATCHES = ['#8b95ff', '#58b6ff', '#3ed6c0', '#5fd4a0', '#ffb35c', '#ff7a90', '#c084fc', '#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff9ff3', '#f368e0', '#00d2d3', '#54a0ff', '#ee5a24'];
 const KEYS = [['Alt+Space', 'Alt + Space'], ['Ctrl+Space', 'Ctrl + Space'], ['Ctrl+Alt+Space', 'Ctrl + Alt + Space'], ['Ctrl+Shift+Space', 'Ctrl + Shift + Space'], ['Alt+Shift+Space', 'Alt + Shift + Space'], ['Ctrl+Alt+S', 'Ctrl + Alt + S']];
 const PEEK_KEYS = [['Alt+W', 'Alt + W'], ['Ctrl+Alt+W', 'Ctrl + Alt + W'], ['Ctrl+Shift+W', 'Ctrl + Shift + W'], ['', 'Disabled']];
 const pct = (v) => Math.round(v * 100) + '%';
@@ -366,6 +366,7 @@ function widgetPage() {
   main.lastChild.append(st);
   main.append(group('Look', [
     { key: 'widgetRadius', label: 'Corner rounding', type: 'range', min: 0, max: 44, step: 1, fmt: px },
+    { key: 'widgetContentScale', label: 'Content zoom', desc: 'Scale text and content inside widgets', type: 'range', min: 0.7, max: 1.4, step: 0.05, fmt: pct },
     { key: 'widgetBorder', label: 'Edge highlight', type: 'toggle' },
     { key: 'widgetShadow', label: 'Drop shadow', type: 'toggle' },
   ], 30));
