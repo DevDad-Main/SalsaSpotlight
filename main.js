@@ -227,6 +227,7 @@ function commandList(q = '') {
     })),
     ...(/size|small|medium|large|big|tiny/.test(q) ? Object.entries(WIDGETS).flatMap(([t, w]) => Object.entries(SIZE_LABELS).map(([k, l]) => ({ id: `size-${t}-${k}`, title: `Resize ${w.title}: ${l}`, sub: 'Change widget size', kw: `resize size widget ${t}` }))) : []),
     { id: 'reindex', title: 'Rebuild search index', sub: 'Rescan files and apps', kw: 'refresh rescan index rebuild' },
+    { id: 'screenshot', title: 'Take screenshot', sub: 'Capture screen and save to Pictures', kw: 'screenshot capture screen grab print snap' },
     { id: 'quit', title: 'Quit Spotlight', sub: 'Exit the launcher', kw: 'exit close quit shutdown' },
   ];
 }
@@ -818,6 +819,22 @@ async function getWeather(city, units) {
 }
 
 // ---------- actions ----------
+async function takeScreenshot() {
+  try {
+    const { desktopCapturer } = require('electron');
+    const primary = screen.getPrimaryDisplay();
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: primary.size.width, height: primary.size.height } });
+    const src = sources[0];
+    if (!src) return;
+    const img = src.thumbnail.toPNG();
+    const dir = path.join(app.getPath('pictures'), 'SalsaSpotlight');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `screenshot-${Date.now()}.png`);
+    fs.writeFileSync(file, img);
+    new Notification({ title: 'Screenshot saved', body: file }).show();
+    shell.showItemInFolder(file);
+  } catch (e) { logError(e); }
+}
 function runCommand(id) {
   switch (id) {
     case 'winsettings': shell.openExternal('ms-settings:'); break;
@@ -830,6 +847,7 @@ function runCommand(id) {
     case 'quit': app.quit(); break;
     case 'spawn': spawnAllWidgets(); break;
     case 'hideall': hideAllWidgets(); break;
+    case 'screenshot': takeScreenshot(); break;
     case 'resetlayout': prefs.widgetLayout = {}; saveSettings(); broadcastState(); if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('arrange'); break;
     default:
       if (id.startsWith('size-')) { const [, t, k] = id.split('-'); setWidgetSize(t, k); }

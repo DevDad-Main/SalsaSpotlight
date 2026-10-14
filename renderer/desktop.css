@@ -62,3 +62,17 @@ body.hidden #grid { opacity: 0; pointer-events: none; }
   height: 100% !important;
   margin: 0 !important;
 }
+
+/* ── Onboarding tour ── */
+.tour { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); animation: fadeIn 0.3s ease; }
+.tour[hidden] { display: none; }
+.tour-box { background: rgba(28,28,32,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 32px 36px; max-width: 420px; width: 90vw; text-align: center; color: #e8e8ef; box-shadow: 0 24px 80px rgba(0,0,0,0.5); animation: rise 0.35s both; }
+.tour-box h2 { margin: 0 0 14px; font-size: 20px; font-weight: 700; color: #fff; }
+.tour-box p { margin: 8px 0; font-size: 14px; line-height: 1.55; color: rgba(232,232,239,0.75); }
+.tour-box b { color: #8b95ff; }
+.tour-next { margin-top: 20px; padding: 10px 28px; border: 0; border-radius: 12px; background: #8b95ff; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.15s, background 0.15s; }
+.tour-next:hover { transform: scale(1.04); background: #9ba4ff; }
+.tour-dots { display: flex; gap: 8px; justify-content: center; margin-top: 18px; }
+.tour-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: background 0.2s; }
+.tour-dots span.on { background: #8b95ff; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

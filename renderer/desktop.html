@@ -9,8 +9,33 @@
 </head>
 <body>
   <div id="grid" class="grid-stack"></div>
+  <div id="tour" class="tour" hidden>
+    <div class="tour-box">
+      <div class="tour-step" data-s="0">
+        <h2>Welcome to SalsaSpotlight</h2>
+        <p>Press <b>Alt + Space</b> (or your hotkey) to open Spotlight search.</p>
+        <p>Search apps, files, calculations, or type widget names.</p>
+        <button class="tour-next">Next</button>
+      </div>
+      <div class="tour-step" data-s="1" hidden>
+        <h2>Widgets</h2>
+        <p>Right-click any widget to <b>resize</b> it or open its <b>settings</b>.</p>
+        <p>Drag widgets to rearrange. They snap to the grid.</p>
+        <p>Press <b>Alt + W</b> to peek/hide all widgets.</p>
+        <button class="tour-next">Next</button>
+      </div>
+      <div class="tour-step" data-s="2" hidden>
+        <h2>Customize</h2>
+        <p>Open <b>Settings</b> from Spotlight to change theme, gap, layout, and more.</p>
+        <p>Type <b>"reset layout"</b> in Spotlight to re-arrange widgets.</p>
+        <button class="tour-next">Got it!</button>
+      </div>
+      <div class="tour-dots"><span class="on"></span><span></span><span></span></div>
+    </div>
+  </div>
   <script src="gridstack-all.js"></script>
   <script src="widgets.js"></script>
   <script src="desktop.js"></script>
+  <script src="tour.js"></script>
 </body>
 </html>
