@@ -1328,8 +1328,21 @@ ipcMain.on('show-props', (_e, p) => {
   } catch (e) { logError(e); }
 });
 ipcMain.on('forget', (_e, p) => {
-  if (settings.usage[String(p)]) {
-    delete settings.usage[String(p)];
+  const key = String(p);
+  let changed = false;
+  if (settings.usage[key]) {
+    delete settings.usage[key];
+    changed = true;
+  }
+  // Also drop this item's query-combo counts so it starts fresh everywhere
+  const qh = settings.qhist || {};
+  for (const q of Object.keys(qh)) {
+    if (qh[q] && qh[q].r === key) {
+      delete qh[q];
+      changed = true;
+    }
+  }
+  if (changed) {
     saveSettings();
     broadcastState();
   }

@@ -276,8 +276,8 @@ function renderDetails() {
     addAct('Show in folder', 'Ctrl+Enter', () => run(true));
     addAct('Copy path', 'Ctrl+Shift+C', () => copyPath());
     addAct('Properties', 'Ctrl+P', () => showProps());
-    addAct('Remove from recents', 'Ctrl+Shift+R', () => forgetRecent());
   }
+  if (r.path || r.cmd) addAct('Remove from recents', 'Ctrl+Shift+R', () => forgetRecent());
   details.append(acts);
 
   row('Kind', TAGS[r.kind]);
@@ -326,8 +326,9 @@ function showProps() {
 }
 function forgetRecent() {
   const r = results[sel];
-  if (!r?.path) return;
-  window.api.forgetRecent(r.path);
+  const key = r && (r.path || (r.cmd ? 'cmd:' + r.cmd : null));
+  if (!key) return;
+  window.api.forgetRecent(key);
   toast('Removed from recents');
   update();
 }
