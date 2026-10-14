@@ -38,6 +38,7 @@ const PAGES = {
     ] },
     { title: 'Folders', items: [
       { key: 'folderOpen', label: 'Open folders with', desc: 'Used when opening a folder from Spotlight', type: 'select', options: [['explorer', 'Windows Explorer'], ['explorerpp', 'Explorer++']] },
+      { key: 'revealWith', label: 'Show in folder (Ctrl+Enter)', desc: 'Windows Explorer selects the file; Explorer++ opens the containing folder', type: 'select', options: [['explorer', 'Windows Explorer'], ['explorerpp', 'Explorer++']] },
       { key: 'explorerppPath', label: 'Explorer++ location', desc: 'Full path to Explorer++.exe - auto-detected from common locations when left empty', type: 'text' },
     ] },
     { title: 'Help', items: [
@@ -344,7 +345,7 @@ function keysBox() {
     const dd = document.createElement('div');
     dd.className = 'kd';
     dd.textContent = desc;
-    rw.append(kk, dd);
+    rw.append(dd, kk); // action left, keycap column right
     box.append(rw);
   });
   return box;

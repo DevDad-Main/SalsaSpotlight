@@ -98,6 +98,7 @@ const DEFAULTS = {
   arrangeAnchor: 'top-right',
   folderOpen: 'explorer',
   explorerppPath: '',
+  revealWith: 'explorer',
   showTour: false,
   gfnRig: 'auto',
   tint: 0.45,
@@ -1108,8 +1109,10 @@ ipcMain.handle('search', (_e, q) => search(String(q)));
 ipcMain.handle('run', async (_e, { item, q, reveal }) => {
   win.hide();
   if (item.path) {
-    if (reveal) shell.showItemInFolder(item.path);
-    else if (!(item.kind === 'folder' && openWithExplorerPP(item.path))) shell.openPath(item.path);
+    if (reveal) {
+      // Explorer++ has no /select switch — it opens the containing folder instead.
+      if (!(prefs.revealWith === 'explorerpp' && openWithExplorerPP(path.dirname(item.path)))) shell.showItemInFolder(item.path);
+    } else if (!(item.kind === 'folder' && openWithExplorerPP(item.path))) shell.openPath(item.path);
     touchUsage(item.path, { n: path.basename(item.path).replace(/\.lnk$/i, ''), k: item.k ?? 0 });
     touchCombo(q, item.path);
     saveSettings();
