@@ -36,6 +36,10 @@ const PAGES = {
     { title: 'Privacy', items: [
       { key: 'clipboard', label: 'Clipboard history', desc: 'Remembers copied text in memory only. Type "clip" in Spotlight. Cleared on quit.', type: 'toggle' },
     ] },
+    { title: 'Folders', items: [
+      { key: 'folderOpen', label: 'Open folders with', desc: 'Used when opening a folder from Spotlight', type: 'select', options: [['explorer', 'Windows Explorer'], ['explorerpp', 'Explorer++']] },
+      { key: 'explorerppPath', label: 'Explorer++ location', desc: 'Full path to Explorer++.exe - auto-detected from common locations when left empty', type: 'text' },
+    ] },
     { title: 'Help', items: [
       { key: 'showTour', label: 'Show welcome tour at startup', desc: 'Displays the 3-step intro each time SalsaSpotlight launches', type: 'toggle' },
       { type: 'button', label: 'Need a refresher?', desc: 'Open the welcome tour now', btn: 'Show help', action: () => window.api.showTour() },

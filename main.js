@@ -96,6 +96,8 @@ const DEFAULTS = {
   launcherTop: 20,
   launcherShadow: false,
   arrangeAnchor: 'top-right',
+  folderOpen: 'explorer',
+  explorerppPath: '',
   showTour: false,
   gfnRig: 'auto',
   tint: 0.45,
@@ -150,7 +152,7 @@ function merge(t, s) {
 function loadSettings() {
   try {
     const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
-    settings = { usage: raw.usage || {}, widgets: raw.widgets || {} };
+    settings = { usage: raw.usage || {}, widgets: raw.widgets || {}, qhist: raw.qhist || {} };
     if (raw.prefs) merge(prefs, raw.prefs);
     if (raw.prefs?.v !== 2) prefs.widgetMode = 'desktop';
     // migrate old spotlightStyle pref to spotlightEffect
@@ -201,6 +203,7 @@ function onPref(key) {
   else if (key === 'clipboard') clipTimerSet();
   else if (key === 'launchAtLogin') app.setLoginItemSettings({ openAtLogin: !!prefs.launchAtLogin });
   else if (key === 'gfnRig') hwPromise = undefined;
+  else if (key === 'explorerppPath' || key === 'folderOpen') ppExe = undefined;
 }
 
 // ---------- indexing ----------
@@ -316,6 +319,51 @@ function calc(raw) {
 const kindOf = (k) => (k === 1 ? 'folder' : k === 0 ? 'file' : 'app');
 const extOf = (p) => { const i = p.lastIndexOf('.'); return i > p.lastIndexOf('\\') ? p.slice(i + 1).toLowerCase() : ''; };
 
+const normQ = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const DAY = 86400000;
+// fff-style frecency: every access adds exp(-ln2/10 * days) (10-day half-life),
+// only the last 30 days count, and past 10 the total grows with sqrt
+// (diminishing returns) — see dmtrKovalenko/fff crates/fff-core/src/dbs/frecency.rs.
+function frecencyOf(u) {
+  if (!u || !u.c) return 0;
+  const ts = u.ts;
+  if (!Array.isArray(ts) || !ts.length) return Math.min(u.c, 10) * 0.5; // legacy count-only entries
+  const now = Date.now();
+  const cut = now - 30 * DAY;
+  let total = 0;
+  for (let i = ts.length - 1; i >= 0; i--) {
+    if (ts[i] < cut) break;
+    total += Math.exp(-((Math.LN2 / 10) * (now - ts[i])) / DAY);
+  }
+  if (!total) return Math.min(u.c, 5) * 0.25;
+  return total <= 10 ? total : 10 + Math.sqrt(total - 10);
+}
+function touchUsage(key, meta) {
+  const u = settings.usage[key] || { c: 0, ts: [] };
+  u.c = (u.c || 0) + 1;
+  if (!Array.isArray(u.ts)) u.ts = [];
+  u.ts.push(Date.now());
+  if (u.ts.length > 32) u.ts = u.ts.slice(-32);
+  if (meta) Object.assign(u, meta);
+  settings.usage[key] = u;
+}
+// fff query history: remember which result a query opened and how often,
+// so "settings" keeps promoting the item you keep picking (combo boost).
+function touchCombo(q, key) {
+  const nq = normQ(q);
+  if (!nq || !key) return;
+  const h = settings.qhist || (settings.qhist = {});
+  const e = h[nq];
+  if (e && e.r === key) e.c = (e.c || 1) + 1;
+  else h[nq] = { r: key, c: 1 };
+  const ks = Object.keys(h);
+  if (ks.length > 300) for (const k of ks.slice(0, ks.length - 300)) delete h[k];
+}
+function comboBoost(q, key) {
+  const e = settings.qhist && settings.qhist[normQ(q)];
+  return e && e.r === key ? Math.min(e.c || 0, 10) * 100 : 0;
+}
+
 // Supports ext:png, .exe, *.exe, type:app|exe|folder|file, in:downloads, glob (*, ?) and /regex/.
 function parseQuery(raw) {
   const f = { text: [], ext: null, type: null, inPath: null, regex: null, glob: null, active: false };
@@ -341,8 +389,11 @@ function search(raw) {
   if (!raw.trim()) {
     if (!S.recents) return [];
     return Object.entries(settings.usage)
-      .sort((a, b) => b[1].c - a[1].c).slice(0, 5)
-      .map(([p, u]) => ({ kind: kindOf(u.k), title: u.n, sub: p, path: p, k: u.k }));
+      .filter(([, u]) => u && u.c && u.n)
+      .sort((a, b) => frecencyOf(b[1]) - frecencyOf(a[1])).slice(0, 5)
+      .map(([p, u]) => (p.startsWith('cmd:')
+        ? { kind: 'cmd', title: u.n, sub: u.s || 'Command', cmd: u.x || p.slice(4) }
+        : { kind: kindOf(u.k), title: u.n, sub: p, path: p, k: u.k }));
   }
   if (!filtered && (q === 'clip' || q.startsWith('clip '))) {
     const cf = q.slice(5).trim();
@@ -378,9 +429,10 @@ function search(raw) {
       if (!s && it.k >= 2 && q.length >= 2 && fuzzy(it.l, q)) s = 200;
     }
     if (!s) continue;
-    const u = settings.usage[it.p];
-    s = (it.k === 1 ? s * 0.75 : s) + (it.k === 3 ? 300 : it.k === 2 ? 150 : 0) + (u ? Math.min(u.c, 10) * 20 : 0) - it.l.length * 0.5;
-    consider(it, s);
+    const base = (it.k === 1 ? s * 0.75 : s) + (it.k === 3 ? 300 : it.k === 2 ? 150 : 0) - it.l.length * 0.5;
+    // fff: frecency boosts the match score proportionally, plus the query combo
+    const frec = frecencyOf(settings.usage[it.p]);
+    consider(it, base + Math.min((base * Math.min(frec, 25)) / 100, 400) + comboBoost(raw, it.p));
   }
   if (S.commands && !filtered) {
     for (const c of commandList(q)) {
@@ -388,7 +440,12 @@ function search(raw) {
       const kwScore = fuzzyScore(c.kw || '', q);
       const subScore = fuzzyScore(c.sub || '', q);
       const s = Math.max(titleScore, kwScore * 0.8, subScore * 0.6);
-      if (s > 0) consider({ cmd: c }, s + 200);
+      if (s > 0) {
+        const cb = s + 200;
+        const key = 'cmd:' + c.id;
+        const frec = frecencyOf(settings.usage[key]);
+        consider({ cmd: c }, cb + Math.min((cb * Math.min(frec, 25)) / 100, 400) + comboBoost(raw, key));
+      }
     }
   }
   hits.sort((a, b) => b[0] - a[0]);
@@ -1052,12 +1109,16 @@ ipcMain.handle('run', async (_e, { item, q, reveal }) => {
   win.hide();
   if (item.path) {
     if (reveal) shell.showItemInFolder(item.path);
-    else shell.openPath(item.path);
-    const u = settings.usage[item.path] || { c: 0 };
-    settings.usage[item.path] = { c: u.c + 1, n: path.basename(item.path).replace(/\.lnk$/i, ''), k: item.k ?? 0 };
+    else if (!(item.kind === 'folder' && openWithExplorerPP(item.path))) shell.openPath(item.path);
+    touchUsage(item.path, { n: path.basename(item.path).replace(/\.lnk$/i, ''), k: item.k ?? 0 });
+    touchCombo(q, item.path);
     saveSettings();
-  } else if (item.kind === 'cmd') runCommand(String(item.cmd));
-  else if (item.kind === 'calc' || item.kind === 'clip') clipboard.writeText(String(item.value));
+  } else if (item.kind === 'cmd') {
+    runCommand(String(item.cmd));
+    touchUsage('cmd:' + item.cmd, { n: item.title, k: -1, x: String(item.cmd), s: item.sub || 'Command' });
+    touchCombo(q, 'cmd:' + item.cmd);
+    saveSettings();
+  } else if (item.kind === 'calc' || item.kind === 'clip') clipboard.writeText(String(item.value));
   else if (item.kind === 'web') shell.openExternal((ENGINES[prefs.search.engine] || ENGINES.google) + encodeURIComponent(q));
 });
 
@@ -1189,8 +1250,8 @@ ipcMain.handle('top-apps', () => {
     return u ? { p, n: u.n, pinned: true } : null;
   }).filter(Boolean);
   const recent = Object.entries(settings.usage)
-    .filter(([p, u]) => u.k >= 2 && !(settings.pinnedApps || []).includes(p))
-    .sort((a, b) => b[1].c - a[1].c).slice(0, 16).map(([p, u]) => ({ p, n: u.n }));
+    .filter(([p, u]) => u.k >= 2 && !p.startsWith('cmd:') && !(settings.pinnedApps || []).includes(p))
+    .sort((a, b) => frecencyOf(b[1]) - frecencyOf(a[1])).slice(0, 16).map(([p, u]) => ({ p, n: u.n }));
   return [...pinned, ...recent];
 });
 ipcMain.on('pin-app', (_e, p) => {
@@ -1201,7 +1262,35 @@ ipcMain.on('pin-app', (_e, p) => {
   saveSettings();
   if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('state', state());
 });
-ipcMain.on('open-path', (_e, p) => { if (settings.usage[p]) shell.openPath(p); });
+ipcMain.on('open-path', (_e, p) => { if (settings.usage[p]) openPathSmart(p); });
+
+// Folder opener: optionally use Explorer++ (GFN's Explorer is poor).
+let ppExe;
+function explorerPP() {
+  if (prefs.folderOpen !== 'explorerpp') return null;
+  const custom = String(prefs.explorerppPath || '').trim();
+  if (custom) { try { return fs.existsSync(custom) ? custom : null; } catch { return null; } }
+  if (ppExe !== undefined) return ppExe;
+  const cand = [
+    'I:\\Apps\\Explorer++\\Explorer++.exe',
+    'I:\\Apps\\Explorer++\\x64\\Explorer++.exe',
+    'I:\\Apps\\SalsaNOW\\Explorer++\\Explorer++.exe',
+    'I:\\Apps\\Tools\\Explorer++\\Explorer++.exe',
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Explorer++', 'Explorer++.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Explorer++', 'Explorer++.exe'),
+  ];
+  ppExe = cand.find((p) => { try { return fs.existsSync(p); } catch { return false; } }) || null;
+  return ppExe;
+}
+function openWithExplorerPP(p) {
+  const pp = explorerPP();
+  if (!pp) return false;
+  try { spawn(pp, [p], { detached: true, stdio: 'ignore' }).unref(); return true; } catch { return false; }
+}
+function openPathSmart(p) {
+  try { if (fs.statSync(p).isDirectory() && openWithExplorerPP(p)) return; } catch { /* not a stat-able path */ }
+  shell.openPath(p);
+}
 
 // Details panel (Windhawk-style) — everything runs as the current user, no admin required.
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
