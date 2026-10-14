@@ -8,6 +8,7 @@
 <body>
   <div id="wrap">
     <div id="app">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="bar">
         <svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
         <input id="q" type="text" placeholder="Spotlight Search" spellcheck="false" autocomplete="off" autofocus>
@@ -19,7 +20,9 @@
         </div>
       </div>
       <ul id="list"></ul>
-      <div id="foot" hidden><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate</span><span><kbd>Enter</kbd> Open</span><span><kbd>Ctrl</kbd><kbd>Enter</kbd> Show in folder</span><span><kbd>Esc</kbd> Close</span></div>
+      <div id="foot" hidden><span><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>Tab</kbd> Navigate</span><span><kbd>Enter</kbd> Open</span><span><kbd>Ctrl</kbd><kbd>Enter</kbd> Folder</span><span><kbd>Ctrl</kbd><kbd>I</kbd> Details</span><span><kbd>Esc</kbd> Close</span></div>
+      <aside id="details"></aside>
+      <div id="toast"></div>
     </div>
   </div>
   <script src="renderer.js"></script>

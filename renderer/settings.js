@@ -4,7 +4,8 @@ let state = null, page = 'general', controls = [], stateReady = false;
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
-const SWATCHES = ['#8b95ff', '#58b6ff', '#3ed6c0', '#5fd4a0', '#ffb35c', '#ff7a90', '#c084fc', '#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff9ff3', '#f368e0', '#00d2d3', '#54a0ff', '#ee5a24'];
+// Windhawk-inspired palette first, then the original Salsa accents.
+const SWATCHES = ['#3b6fd4', '#5b6472', '#22262e', '#14b8a6', '#fb7185', '#e11d48', '#38bdf8', '#a78bfa', '#f59e0b', '#10b981', '#8b5cf6', '#2dd4bf', '#8b95ff', '#ffd93d', '#6bcb77', '#ff9ff3'];
 const KEYS = [['Alt+Space', 'Alt + Space'], ['Ctrl+Space', 'Ctrl + Space'], ['Ctrl+Alt+Space', 'Ctrl + Alt + Space'], ['Ctrl+Shift+Space', 'Ctrl + Shift + Space'], ['Alt+Shift+Space', 'Alt + Shift + Space'], ['Ctrl+Alt+S', 'Ctrl + Alt + S']];
 const PEEK_KEYS = [['Alt+W', 'Alt + W'], ['Ctrl+Alt+W', 'Ctrl + Alt + W'], ['Ctrl+Shift+W', 'Ctrl + Shift + W'], ['', 'Disabled']];
 const pct = (v) => Math.round(v * 100) + '%';
@@ -28,7 +29,8 @@ const PAGES = {
   ] },
   appearance: { title: 'Appearance', icon: 'palette', groups: [
     { title: 'Theme', items: [
-      { key: 'spotlightStyle', label: 'Spotlight style', desc: 'Rounded floating card, or Windows acrylic blur', type: 'select', options: [['rounded', 'Rounded card'], ['acrylic', 'Acrylic (Windows blur)']] },
+      { key: 'spotlightEffect', label: 'Background effect', desc: 'Solid card, or blurred material effects', type: 'select', options: [['solid', 'Solid card'], ['acrylic', 'Acrylic (Windows blur)'], ['mica', 'Mica'], ['glass', 'Glass'], ['frosted', 'Frosted'], ['aurora', 'Aurora']] },
+      { key: 'spotlightBlur', label: 'Blur strength', desc: 'How strong the background blur is', type: 'range', min: 20, max: 100, step: 5, fmt: (v) => v + '%' },
       { key: 'theme', label: 'Theme', type: 'select', options: [['system', 'Match Windows'], ['dark', 'Dark'], ['light', 'Light']] },
       { key: 'accent', label: 'Accent colour', type: 'swatch' },
       { key: 'tint', label: 'Spotlight glass tint', desc: 'Lower is more see-through', type: 'range', min: 0.15, max: 0.9, step: 0.05, fmt: pct },
@@ -54,6 +56,7 @@ const PAGES = {
       { key: 'search.maxResults', label: 'Maximum results', type: 'range', min: 4, max: 10, step: 1, fmt: (v) => v },
       { key: 'search.web', label: 'Web search fallback', type: 'toggle' },
       { key: 'search.engine', label: 'Search engine', type: 'select', options: [['google', 'Google'], ['bing', 'Bing'], ['duckduckgo', 'DuckDuckGo'], ['brave', 'Brave']] },
+      { key: 'indexEvery', label: 'App index updates', desc: 'How often the app list refreshes in the background', type: 'select', options: [[1, 'Every minute'], [3, 'Every 3 minutes'], [5, 'Every 5 minutes'], [10, 'Every 10 minutes']] },
     ] },
   ] },
 };

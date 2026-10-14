@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('api', {
   resize: (h) => ipcRenderer.send('resize', h),
   hide: () => ipcRenderer.send('hide'),
   onShown: (cb) => ipcRenderer.on('shown', cb),
+  // details panel
+  fileInfo: (p) => ipcRenderer.invoke('file-info', p),
+  copyPath: (p) => ipcRenderer.send('copy-path', p),
+  showProps: (p) => ipcRenderer.send('show-props', p),
+  forgetRecent: (p) => ipcRenderer.send('forget', p),
+  reindex: () => ipcRenderer.send('reindex'),
   // shared state and settings
   getState: () => ipcRenderer.invoke('state'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),

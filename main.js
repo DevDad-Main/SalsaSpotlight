@@ -76,7 +76,9 @@ const ENGINES = {
 const DEFAULTS = {
   v: 2,
   hotkey: 'Alt+Space',
-  spotlightStyle: 'rounded',
+  spotlightEffect: 'solid',
+  spotlightBlur: 50,
+  indexEvery: 10,
   peekKey: 'Alt+W',
   launchAtLogin: false,
   theme: 'system',
@@ -150,6 +152,8 @@ function loadSettings() {
     settings = { usage: raw.usage || {}, widgets: raw.widgets || {} };
     if (raw.prefs) merge(prefs, raw.prefs);
     if (raw.prefs?.v !== 2) prefs.widgetMode = 'desktop';
+    // migrate old spotlightStyle pref to spotlightEffect
+    if (!raw.prefs?.spotlightEffect && raw.prefs?.spotlightStyle === 'acrylic') prefs.spotlightEffect = 'acrylic';
   } catch { /* first run */ }
   prefs.launchAtLogin = app.getLoginItemSettings().openAtLogin;
 }
@@ -188,7 +192,8 @@ function setPref(key, val) {
 function onPref(key) {
   if (key === 'hotkey' || key === 'peekKey') registerKeys();
   else if (key === 'theme') nativeTheme.themeSource = prefs.theme;
-  else if (key === 'spotlightStyle') { const old = win; createWindow(); old.destroy(); }
+  else if (key === 'spotlightEffect') { const old = win; createWindow(); old.destroy(); }
+  else if (key === 'indexEvery') armIndexTimer();
   else if (key === 'widgetMode') { ensurePoller(); applyVisibility(); }
   else if (key === 'widgetScale' || key === 'autoScale') relayoutAll();
   else if (key === 'launcherWidth') win.setContentSize(winWidth(), win.getContentSize()[1]);
@@ -211,6 +216,13 @@ function startIndex() {
     if (m.done) { items = target; indexing = false; w.terminate(); }
   });
   w.on('error', () => { indexing = false; });
+}
+
+let indexTimer = null;
+function armIndexTimer() {
+  clearInterval(indexTimer);
+  const mins = Math.max(1, Number(prefs.indexEvery) || 10);
+  indexTimer = setInterval(startIndex, mins * 60 * 1000);
 }
 
 // ---------- search ----------
@@ -392,14 +404,14 @@ function search(raw) {
 }
 
 // ---------- launcher window ----------
-const PAD = () => (prefs.spotlightStyle === 'rounded' ? 18 : 0);
+const PAD = () => (prefs.spotlightEffect === 'acrylic' ? 0 : 18);
 const winWidth = () => prefs.launcherWidth + PAD() * 2;
 
 function createWindow() {
-  const rounded = prefs.spotlightStyle === 'rounded';
+  const acrylic = prefs.spotlightEffect === 'acrylic';
   win = new BrowserWindow({
     width: winWidth(), height: 70 + PAD() * 2, show: false, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true,
-    ...(rounded ? { transparent: true, hasShadow: false } : { backgroundMaterial: 'acrylic', roundedCorners: true, thickFrame: false }),
+    ...(acrylic ? { backgroundMaterial: 'acrylic', roundedCorners: true, thickFrame: false } : { transparent: true, hasShadow: false }),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
   win.setMenu(null);
@@ -471,10 +483,15 @@ function flash(ms) {
 function sendShowTour() {
   if (!desktopWin || desktopWin.isDestroyed()) return;
   tourOpen = true;
+  revealDesktop(); // tour never paints over a hidden-opacity window
   if (!desktopWin.isVisible()) desktopWin.showInactive();
   desktopWin.setAlwaysOnTop(true, 'screen-saver'); // lift above open windows so the tour is visible
   desktopWin.moveTop();
   desktopWin.webContents.send('show-tour');
+}
+
+function revealDesktop() {
+  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.setOpacity(1);
 }
 
 function createDesktopWindow() {
@@ -486,13 +503,26 @@ function createDesktopWindow() {
     focusable: true, alwaysOnTop: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
+  // Stay invisible until first real paint so a transparent window never flashes grey
+  desktopWin.setOpacity(0);
   desktopWin.setIgnoreMouseEvents(true, { forward: true });
   desktopWin.setMenu(null);
+  desktopWin.webContents.once('did-finish-load', () => {
+    if (!desktopWin || desktopWin.isDestroyed()) return;
+    try {
+      desktopWin.webContents
+        .executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+        .catch(() => {})
+        .then(() => setTimeout(revealDesktop, 150));
+    } catch { revealDesktop(); }
+    setTimeout(revealDesktop, 2500); // hard fallback so the desktop can never stay invisible
+  });
   desktopWin.loadFile(path.join(__dirname, 'renderer', 'desktop.html'));
   desktopWin.on('blur', pinAll);
   desktopWin.once('ready-to-show', () => {
     desktopWin.__ready = true;
     applyVisibility();
+    setTimeout(revealDesktop, 3000); // belt-and-suspenders if did-finish-load never fires
     if (pendingTour || prefs.showTour) { pendingTour = false; setTimeout(sendShowTour, 700); }
   });
   desktopWin.on('closed', () => { desktopWin = null; });
@@ -1072,6 +1102,7 @@ ipcMain.on('reset', () => {
   saveSettings();
   nativeTheme.themeSource = prefs.theme;
   registerKeys(); ensurePoller(); clipTimerSet();
+  if (win && !win.isDestroyed()) { const old = win; createWindow(); old.destroy(); }
   relayoutAll();
   applyVisibility();
   broadcastState();
@@ -1160,6 +1191,47 @@ ipcMain.on('pin-app', (_e, p) => {
   if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('state', state());
 });
 ipcMain.on('open-path', (_e, p) => { if (settings.usage[p]) shell.openPath(p); });
+
+// Details panel (Windhawk-style) — everything runs as the current user, no admin required.
+const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+ipcMain.handle('file-info', async (_e, p) => {
+  try {
+    const fp = String(p);
+    const st = fs.statSync(fp);
+    const info = {
+      name: path.basename(fp),
+      dir: path.dirname(fp),
+      isDir: st.isDirectory(),
+      size: st.isDirectory() ? null : st.size,
+      mtime: st.mtimeMs,
+      target: null,
+    };
+    if (/\.lnk$/i.test(fp)) {
+      const out = await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        `(New-Object -ComObject WScript.Shell).CreateShortcut(${psq(fp)}).TargetPath`], 3000);
+      info.target = lines(out)[0] || null;
+    }
+    return info;
+  } catch { return null; }
+});
+ipcMain.on('copy-path', (_e, s) => clipboard.writeText(String(s)));
+ipcMain.on('show-props', (_e, p) => {
+  try {
+    if (win && win.isVisible()) win.hide();
+    const fp = String(p);
+    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `$s=New-Object -ComObject Shell.Application;$f=$s.Namespace(${psq(path.dirname(fp))});$i=$f.ParseName(${psq(path.basename(fp))});if($i){$i.InvokeVerb('properties')}`],
+      { windowsHide: true, detached: true, stdio: 'ignore' }).unref();
+  } catch (e) { logError(e); }
+});
+ipcMain.on('forget', (_e, p) => {
+  if (settings.usage[String(p)]) {
+    delete settings.usage[String(p)];
+    saveSettings();
+    broadcastState();
+  }
+});
+ipcMain.on('reindex', () => { startIndex(); });
 ipcMain.handle('clip-get', () => clipHistory);
 ipcMain.on('clip-copy', (_e, i) => { if (clipHistory[i]) clipboard.writeText(clipHistory[i]); });
 ipcMain.on('clip-clear', () => {
@@ -1300,12 +1372,19 @@ app.whenReady().then(() => {
   }
   startIndex();
   setupUpdates();
-  setInterval(startIndex, 10 * 60 * 1000);
+  armIndexTimer();
   clipTimerSet();
   ensurePoller();
   // Restore open widgets
   for (const t of Object.keys(WIDGETS)) if (settings.widgets[t]?.open) openWidgets.add(t);
   broadcastState();
+  // Heal after session start: re-assert visibility, state and bottom-pin once things settle
+  [4000, 12000].forEach((ms) => setTimeout(() => {
+    if (quitting) return;
+    applyVisibility();
+    broadcastState();
+    pinWidget();
+  }, ms));
 });
 
 app.on('before-quit', () => { quitting = true; });
