@@ -1039,7 +1039,7 @@ function createWidget(type, el, card, api) {
   const closeBtn = card.querySelector('.x');
   if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); api.closeWidget(type); });
 
-  return { mount, setState, setPaused, destroy, type, onClipEvent: (fn) => { onClip = fn; } };
+  return { mount, setState, setPaused, destroy, type, onClipEvent: (l) => { onClip(l); } };
 }
 
 // Expose globally for desktop.js

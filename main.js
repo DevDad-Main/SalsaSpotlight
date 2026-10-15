@@ -153,7 +153,10 @@ function merge(t, s) {
 function loadSettings() {
   try {
     const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
-    settings = { usage: raw.usage || {}, widgets: raw.widgets || {}, qhist: raw.qhist || {} };
+    // Keep every top-level key (pinnedApps, widgetLayout, future ones) — only
+    // defaults-fill the collections and take prefs separately below.
+    settings = { ...raw, usage: raw.usage || {}, widgets: raw.widgets || {}, qhist: raw.qhist || {} };
+    delete settings.prefs;
     if (raw.prefs) merge(prefs, raw.prefs);
     if (raw.prefs?.v !== 2) prefs.widgetMode = 'desktop';
     // migrate old spotlightStyle pref to spotlightEffect
@@ -1210,7 +1213,10 @@ ipcMain.handle('net', async () => {
 });
 ipcMain.on('drag-start', () => { /* gridstack handles drag internally */ });
 ipcMain.on('drag-end', () => { /* gridstack handles drop internally */ });
-ipcMain.on('arrange', () => { /* renderer handles arrange */ broadcastState(); });
+ipcMain.on('arrange', () => {
+  // Forward to the desktop window — the desktop grid is what arranges
+  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.webContents.send('arrange');
+});
 ipcMain.on('show-tour', sendShowTour);
 ipcMain.on('tour-closed', () => {
   if (!desktopWin || desktopWin.isDestroyed()) return;

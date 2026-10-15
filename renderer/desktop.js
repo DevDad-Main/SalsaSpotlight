@@ -6,6 +6,7 @@
   let grid = null;
   const instances = {};   // type -> { inst, el, card, item }
   let state = null;
+  let appliedLayout = null; // last widgetLayout JSON we applied or saved (echo guard)
   let paused = false;
   let overWidget = false;
   let dragging = false;
@@ -24,17 +25,22 @@
   // uses window.innerHeight — NOT window.screen.height (full display incl. taskbar).
   function gridRows() {
     const cellH = (grid && grid.opts.cellHeight) || 50;
-    return Math.max(4, Math.floor(window.innerHeight / cellH));
+    // +1e-6 absorbs float error when cellH was derived as innerHeight/rows (exact tiling)
+    return Math.max(4, Math.floor(window.innerHeight / cellH + 1e-6));
   }
 
   function initGrid() {
     const cols = Math.max(3, Math.min(8, Math.floor(window.innerWidth / 400)));
-    const cellH = Math.max(30, Math.round(window.innerHeight / 22));
+    // Nominal 22-row design, but with a FRACTIONAL row height so rows tile the work
+    // area exactly — no leftover strip at the bottom, just the 12px grid margin above
+    // the taskbar (instead of up to ~45px on some taskbar heights).
+    const rows = Math.max(4, Math.round(window.innerHeight / Math.max(30, Math.round(window.innerHeight / 22))));
+    const cellH = window.innerHeight / rows;
 
     grid = GridStack.init({
       column: cols,
       cellHeight: cellH,
-      maxRow: Math.floor(window.innerHeight / cellH),
+      maxRow: rows,
       margin: 12,
       float: true,
       animate: true,
@@ -164,6 +170,7 @@
       };
     }
     window.api.setSetting('widgetLayout', layout);
+    appliedLayout = JSON.stringify(layout); // our own write — don't re-apply the echo
   }
 
   function loadLayout(saved) {
@@ -176,7 +183,6 @@
 
   // ── State handling ──
   function applyState(s) {
-    const prev = state;
     state = s;
 
     const r = document.documentElement.style;
@@ -202,7 +208,13 @@
       else if (shouldBeOpen && isOpen) instances[type].inst.setState(s);
     }
 
-    if (!prev && s.widgetLayout) { loadLayout(s.widgetLayout); clampAllWidgets(); }
+    // Re-apply whenever the saved layout CHANGES (import, reset-layout), not just
+    // on the first state — and skip mid-drag so we never fight the pointer.
+    const ls = JSON.stringify(s.widgetLayout || {});
+    if (ls !== appliedLayout) {
+      appliedLayout = ls;
+      if (s.widgetLayout && !dragging) { loadLayout(s.widgetLayout); clampAllWidgets(); }
+    }
 
     // Apply widget gap from prefs — gridstack uses --gs-item-margin-* on the grid element
     if (typeof s.prefs.widgetGap === 'number') {

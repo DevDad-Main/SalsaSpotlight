@@ -537,8 +537,11 @@ function widgetPage() {
           try {
             const d = JSON.parse(r.result);
             if (d.layout) window.api.setSetting('widgetLayout', d.layout);
-            if (d.open) Object.entries(d.open).forEach(([t, should]) => { if (should && !state.open[t]) window.api.toggleWidget(t); });
-            setTimeout(() => window.api.arrange(), 300);
+            // Export writes open as an array of type names; older/hand-made files may use a map
+            const openList = Array.isArray(d.open) ? d.open : Object.keys(d.open || {});
+            openList.forEach((t) => { if (state.open && !state.open[t]) window.api.toggleWidget(t); });
+            // No arrange here — it would re-tile and clobber the just-imported positions;
+            // the desktop applies the new layout when it arrives via state broadcast.
           } catch { alert('Invalid layout file'); }
         };
         r.readAsText(f);
