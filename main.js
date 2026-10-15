@@ -88,9 +88,6 @@ const DEFAULTS = {
   widgetBorder: true,
   widgetShadow: true,
   widgetContentScale: 1,
-  snapToGrid: true,
-  gridCollisions: true,
-  autoScale: true,
   launcherRadius: 22,
   launcherWidth: 700,
   launcherTop: 20,
@@ -178,6 +175,7 @@ const state = () => ({
   widgets: Object.fromEntries(Object.entries(WIDGETS).map(([k, v]) => [k, v.title])),
   poller: pollerOk,
   widgetLayout: prefs.widgetLayout || {},
+  widgetDims: Object.fromEntries(Object.entries(WIDGETS).map(([k, v]) => [k, v.size])),
 });
 function broadcastState() {
   const s = state();
@@ -202,7 +200,8 @@ function onPref(key) {
   else if (key === 'spotlightEffect') { const old = win; createWindow(); old.destroy(); }
   else if (key === 'indexEvery') armIndexTimer();
   else if (key === 'widgetMode') { ensurePoller(); applyVisibility(); }
-  else if (key === 'widgetScale' || key === 'autoScale') relayoutAll();
+  else if (key === 'widgetScale') relayoutAll();
+  else if (key === 'launcherTop') positionLauncher();
   else if (key === 'launcherWidth') win.setContentSize(winWidth(), win.getContentSize()[1]);
   else if (key === 'clipboard') clipTimerSet();
   else if (key === 'launchAtLogin') app.setLoginItemSettings({ openAtLogin: !!prefs.launchAtLogin });
@@ -482,12 +481,17 @@ function createWindow() {
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
 }
 
+function positionLauncher() {
+  if (!win) return;
+  const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * (prefs.launcherTop / 100) - PAD()));
+}
+
 function toggle() {
   if (win.isVisible()) return win.hide();
-  const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
   const h = Math.max(70 + PAD() * 2, launcherHeight);
   win.setContentSize(winWidth(), h);
-  win.setPosition(Math.round(d.x + (d.width - winWidth()) / 2), Math.round(d.y + d.height * (prefs.launcherTop / 100) - PAD()));
+  positionLauncher();
   win.show();
   win.focus();
   win.webContents.send('shown');

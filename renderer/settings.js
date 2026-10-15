@@ -498,7 +498,6 @@ function widgetPage() {
     { key: 'peekKey', label: 'Peek shortcut', desc: 'Shows or hides all widgets over your windows from anywhere', type: 'select', options: PEEK_KEYS },
     { key: 'widgetOpacity', label: 'Widget opacity', type: 'range', min: 0.4, max: 1, step: 0.05, fmt: pct },
     { key: 'widgetScale', label: 'Widget size', type: 'range', min: 0.7, max: 1.6, step: 0.05, fmt: pct },
-    { key: 'autoScale', label: 'Scale to my screen', desc: 'Sizes widgets for the monitor or TV they are on', type: 'toggle' },
   ], 0));
   const st = document.createElement('div');
   st.className = 'item';
@@ -511,8 +510,6 @@ function widgetPage() {
     { key: 'widgetShadow', label: 'Drop shadow', type: 'toggle' },
   ], 30));
   main.append(group('Grid', [
-    { key: 'snapToGrid', label: 'Snap to grid', desc: 'The grid is sized from your screen, so layouts fit any monitor', type: 'toggle' },
-    { key: 'gridCollisions', label: 'Push widgets out of the way', desc: 'Dropping a widget on another moves it to the nearest free spot', type: 'toggle' },
     { key: 'widgetGap', label: 'Gap between widgets', type: 'range', min: 0, max: 30, step: 1, fmt: px },
     { key: 'arrangeAnchor', label: 'Auto-arrange origin', desc: 'Where widgets cluster when auto-arranged', type: 'select',
       options: [['top-right', 'Top Right (macOS default)'], ['top-left', 'Top Left'], ['bottom-right', 'Bottom Right'], ['bottom-left', 'Bottom Left'], ['center', 'Centered']] },

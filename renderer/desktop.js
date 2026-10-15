@@ -19,6 +19,9 @@
     pomodoro: 6, habits: 6, uptime: 3, speedtest: 3, calendarEvents: 6,
   };
   const MIN_H = { clock: 3, specs: 7, calendar: 6, weather: 4, system: 5, timer: 5, pomodoro: 5 };
+  // Mirrors main.js SIZES — used to scale grid dimensions for the S/M/L/xL menu
+  const SIZE_MUL = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
+  let lastScale = null; // last applied prefs.widgetScale (for ratio-based scaling)
 
   // ── Grid setup ──
   // The desktop window is sized to the work area (excludes taskbar), so all row math
@@ -119,11 +122,22 @@
     if (!state || instances[type]) return;
     const item = createGridItem(type);
     gridEl.appendChild(item);
-    const h = DEFAULT_H[type] || 4;
+    // Default size from the widget's px dims (WIDGETS[t].size) scaled by the
+    // size menu (S/M/L/xL) and the global Widget size slider
+    const mul = SIZE_MUL[state.sizes?.[type]] || 1;
+    const scale = Number(state.prefs.widgetScale) || 1;
+    const cols = grid.opts.column;
+    const cw = (gridEl.offsetWidth / cols) || 100;
+    const pxW = state.widgetDims?.[type]?.[0] || 330;
+    const w = Math.max(1, Math.min(cols, Math.round((pxW * mul * scale) / cw)));
+    const h = Math.max(MIN_H[type] || 2, Math.round((DEFAULT_H[type] || 4) * mul * scale));
+    item.setAttribute('gs-w', w);
+    item.setAttribute('gs-h', h);
     // Position based on arrange anchor so new widgets appear in the right zone
-    const x = anchorStartCol(1);
-    grid.makeWidget(item, { w: 1, h, x, autoPosition: false });
+    const x = anchorStartCol(w);
+    grid.makeWidget(item, { w, h, x, autoPosition: false });
     instances[type].inst.mount(state.prefs.widgetOpts[type], state.prefs);
+    instances[type].szk = state.sizes?.[type] || 'm';
   }
 
   function unmountWidget(type) {
@@ -208,6 +222,29 @@
       else if (shouldBeOpen && isOpen) instances[type].inst.setState(s);
     }
 
+    // Size menu (S/M/L/xL) + Widget size slider — apply as relative scale changes
+    if (grid) {
+      const scale = Number(s.prefs.widgetScale) || 1;
+      if (lastScale === null) lastScale = scale;
+      const scaleRatio = scale / lastScale;
+      lastScale = scale;
+      for (const type of Object.keys(s.widgets)) {
+        const inst = instances[type];
+        if (!inst) continue;
+        const szk = s.sizes?.[type] || 'm';
+        const prevSzk = inst.szk || 'm';
+        inst.szk = szk;
+        const ratio = ((SIZE_MUL[szk] || 1) / (SIZE_MUL[prevSzk] || 1)) * scaleRatio;
+        if (Math.abs(ratio - 1) < 1e-4) continue;
+        const w = parseInt(inst.item.getAttribute('gs-w') || 1);
+        const h = parseInt(inst.item.getAttribute('gs-h') || 4);
+        const nw = Math.max(1, Math.min(grid.opts.column, Math.round(w * ratio)));
+        const nh = Math.max(MIN_H[type] || 2, Math.round(h * ratio));
+        if (!dragging) grid.update(inst.item, { w: nw, h: nh }, false);
+      }
+      if (!dragging && Math.abs(scaleRatio - 1) > 1e-4) clampAllWidgets();
+    }
+
     // Re-apply whenever the saved layout CHANGES (import, reset-layout), not just
     // on the first state — and skip mid-drag so we never fight the pointer.
     const ls = JSON.stringify(s.widgetLayout || {});
@@ -215,6 +252,10 @@
       appliedLayout = ls;
       if (s.widgetLayout && !dragging) { loadLayout(s.widgetLayout); clampAllWidgets(); }
     }
+
+    // No saved layout (fresh install or Reset Layout): pack widgets into a tidy
+    // grid; arrange persists the layout, so this stops firing once it's saved.
+    if (!dragging && !(s.widgetLayout && Object.keys(s.widgetLayout).length)) arrangeWidgets();
 
     // Apply widget gap from prefs — gridstack uses --gs-item-margin-* on the grid element
     if (typeof s.prefs.widgetGap === 'number') {
