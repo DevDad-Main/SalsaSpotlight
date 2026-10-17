@@ -476,6 +476,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
   win.setMenu(null);
+  win.setAlwaysOnTop(true, 'screen-saver'); // stays above fullscreen games
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('blur', () => win.hide());
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
@@ -494,6 +495,7 @@ function toggle() {
   positionLauncher();
   win.show();
   win.focus();
+  win.moveTop();
   win.webContents.send('shown');
 }
 
@@ -530,6 +532,7 @@ function applyVisibility() {
   desktopWin.setAlwaysOnTop(topMost() || tourOpen, tourOpen ? 'screen-saver' : undefined);
   clearTimeout(desktopWin.__hide);
   if (show) {
+    desktopWin.setSkipTaskbar(true); // Windows/GFN sometimes re-adds the taskbar tile
     if (!desktopWin.isVisible()) desktopWin.showInactive();
     desktopWin.webContents.send('vis', true);
     pinWidget();
@@ -557,7 +560,10 @@ function sendShowTour() {
 }
 
 function revealDesktop() {
-  if (desktopWin && !desktopWin.isDestroyed()) desktopWin.setOpacity(1);
+  if (desktopWin && !desktopWin.isDestroyed()) {
+    desktopWin.setSkipTaskbar(true);
+    desktopWin.setOpacity(1);
+  }
 }
 
 function createDesktopWindow() {
@@ -1480,7 +1486,8 @@ function createTray() {
 function registerKeys() {
   globalShortcut.unregisterAll();
   const primary = !!prefs.hotkey && globalShortcut.register(prefs.hotkey, toggle);
-  if (!primary) globalShortcut.register('Ctrl+Space', toggle);
+  // Always register the backup too — a focused game can swallow the primary combo
+  globalShortcut.register('Ctrl+Space', toggle);
   if (prefs.peekKey) globalShortcut.register(prefs.peekKey, () => { peek = !peek; applyVisibility(); });
   return primary;
 }

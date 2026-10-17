@@ -30,7 +30,7 @@ const px = (v) => v + ' px';
 const PAGES = {
   general: { title: 'General', icon: 'settings', groups: [
     { title: 'Launcher', items: [
-      { key: 'hotkey', label: 'Open Spotlight with', desc: 'Falls back to Ctrl + Space if the shortcut is taken', type: 'select', options: KEYS },
+      { key: 'hotkey', label: 'Open Spotlight with', desc: 'Ctrl + Space always works as a backup too', type: 'select', options: KEYS },
       { key: 'launchAtLogin', label: 'Launch at login', desc: 'Starts with Windows for your account only', type: 'toggle' },
       { type: 'salsanow', label: 'SalsaNOW automatic startup', desc: 'Adds SalsaSpotlight to I:\\Apps\\SalsaNOW\\StartupBatch.bat so it launches with your GFN session' },
     ] },

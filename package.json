@@ -1,6 +1,6 @@
 {
   "name": "spotlight-win",
-  "version": "1.6.9",
+  "version": "1.6.10",
   "description": "Spotlight-style launcher and floating desktop widgets for Windows 11",
   "main": "main.js",
   "author": "DevDad-Main",
