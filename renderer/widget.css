@@ -48,6 +48,20 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .w-notes .x { color: rgba(58, 46, 5, 0.6); }
 .w-notes .inp { color: #3a2e05; }
 .w-notes .inp::placeholder { color: rgba(58, 46, 5, 0.45); }
+.w-notes .paper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.45); border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 14px; overflow: hidden; }
+.w-notes .paper::after { content: ''; position: absolute; top: 0; bottom: 0; left: 38px; width: 1px; background: rgba(200, 55, 40, 0.4); pointer-events: none; }
+.w-notes .ninp { flex: none; width: auto; margin: 10px 12px 4px 50px; padding: 7px 10px; }
+.w-notes .nlist { margin-top: 4px; padding: 0 10px 8px 50px; }
+.w-notes .nrow { display: flex; align-items: center; gap: 9px; min-height: 27px; padding: 2px 0; border-bottom: 1px solid rgba(58, 46, 5, 0.1); animation: rise 0.3s both; }
+.w-notes .nb { width: 6px; height: 6px; border-radius: 50%; background: rgba(58, 46, 5, 0.55); flex: none; }
+.w-notes .nt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: text; }
+.w-notes .del { margin-left: auto; background: none; border: 0; padding: 2px; color: rgba(58, 46, 5, 0.45); opacity: 0; transition: opacity 0.15s; }
+.w-notes .nrow:hover .del { opacity: 1; }
+.w-notes .del:hover { color: var(--red); }
+.w-notes .nempty { min-height: 27px; display: flex; align-items: center; color: rgba(58, 46, 5, 0.5); font-size: 12px; font-style: italic; }
+.w-notes .nedit { flex: 1; min-width: 0; width: auto; margin: 0; padding: 3px 8px; border-radius: 7px; }
+.w-notes .nadd { display: flex; align-items: center; justify-content: center; width: 23px; height: 23px; padding: 0; margin-right: 22px; background: rgba(58, 46, 5, 0.1); border: 0; border-radius: 8px; color: #3a2e05; transition: background 0.15s; }
+.w-notes .nadd:hover { background: rgba(58, 46, 5, 0.2); }
 .w-weather { color: #fff; --muted: rgba(255, 255, 255, 0.75); --tile: rgba(255, 255, 255, 0.14); --track: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.15); background: linear-gradient(160deg, #4aa3f0, #2a6fd6); }
 .w-weather[data-sky="night"] { background: linear-gradient(160deg, #26356b, #0e1433); }
 .w-weather[data-sky="cloud"] { background: linear-gradient(160deg, #8796aa, #5a6a7e); }
@@ -154,11 +168,12 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .ac-info { margin-top: 6px; }
 .ac-info b { display: block; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75px; }
 .ac-info small { display: block; font-size: 9.5px; color: var(--muted); margin-top: 1px; letter-spacing: 0.02em; font-weight: 500; }
-.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 12.5px; flex: 1; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 2px; text-align: center; font-size: 12.5px; flex: 1; min-height: 0; }
 .grid .dn { color: var(--muted); font-size: 10.5px; font-weight: 600; align-self: center; }
-.grid .d { display: grid; place-items: center; border-radius: 50%; aspect-ratio: 1; }
+.grid .d { display: grid; place-items: center; position: relative; }
 .grid .d.o { color: var(--muted); opacity: 0.5; }
-.grid .d.t { background: var(--red); color: #fff; font-weight: 700; }
+.grid .d.t { z-index: 0; color: #fff; font-weight: 700; }
+.grid .d.t::before { content: ''; position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(1.9em, 90%); aspect-ratio: 1; border-radius: 50%; background: var(--red); }
 
 /* greeting */
 .hello { font-size: 19px; font-weight: 600; margin-bottom: 12px; }
@@ -194,7 +209,6 @@ textarea.inp { flex: 1; resize: none; line-height: 1.45; font-size: 14px; backgr
 .todo.done span { text-decoration: line-through; opacity: 0.45; }
 .todo .del { background: none; border: 0; opacity: 0; color: var(--red); }
 .todo:hover .del { opacity: 1; }
-.saved { font-size: 11px; color: var(--muted); text-align: right; margin-top: 6px; transition: opacity 0.3s; }
 
 /* dock + clipboard */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 1; -webkit-app-region: no-drag; }
@@ -386,6 +400,14 @@ body.noshadow .card { box-shadow: none; }
   .w-calendar .grid { font-size: 16px; }
   .w-calendar .grid .dn { font-size: 13px; }
 }
+@container card (min-width: 560px) {
+  .w-calendar .grid { font-size: 17px; gap: 4px; }
+  .w-calendar .grid .dn { font-size: 13.5px; }
+}
+@container card (min-height: 560px) {
+  .w-calendar .grid { font-size: 19.5px; }
+  .w-calendar .grid .dn { font-size: 14.5px; }
+}
 
 /* Large progress */
 @container card (min-width: 420px) {
@@ -422,11 +444,9 @@ body.noshadow .card { box-shadow: none; }
   .w-specs .row { padding: 6px 8px; }
 }
 
-/* Large todo / notes */
+/* Large todo */
 @container card (min-width: 420px) {
   .w-todo .todo { font-size: 14.5px; }
-  .w-notes textarea.inp { font-size: 16px; }
-  .w-notes .saved { font-size: 12.5px; }
 }
 
 /* Large pomodoro */
@@ -463,20 +483,9 @@ body.noshadow .card { box-shadow: none; }
 .hc { width: 8px; height: 8px; border-radius: 2px; background: var(--track); flex: none; }
 .hc.on { background: var(--green); }
 
-/* ── Notes markdown preview ── */
-.md { flex: 1; overflow-y: auto; padding: 8px 4px; line-height: 1.5; }
-.md h1 { font-size: 1.3em; margin: 0.4em 0 0.2em; }
-.md h2 { font-size: 1.15em; margin: 0.4em 0 0.2em; }
-.md h3 { font-size: 1.05em; margin: 0.3em 0 0.15em; }
-.md b { color: var(--text); }
-.md i { color: var(--muted); }
-.md code { background: var(--track); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; font-family: Consolas, monospace; }
-.md ul { padding-left: 18px; margin: 0.3em 0; }
-.md li { margin: 0.15em 0; }
-
 /* ── Pomodoro focus mode ── */
-body.focus-mode .grid-stack-item:not(.w-pomodoro) { opacity: 0.15; pointer-events: none; transition: opacity 0.4s; }
-body.focus-mode .grid-stack-item.w-pomodoro { opacity: 1; z-index: 10; }
+body.focus-mode .grid-stack-item:not([data-type="pomodoro"]) { opacity: 0.15; pointer-events: none; transition: opacity 0.4s; }
+body.focus-mode .grid-stack-item[data-type="pomodoro"] { opacity: 1; z-index: 10; }
 
 /* ── Dock pin ── */
 .tile { position: relative; }

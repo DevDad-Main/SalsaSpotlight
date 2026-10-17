@@ -65,6 +65,7 @@ function createWidget(type, el, card, api) {
       palette: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
       volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
       music2: '<circle cx="8" cy="18" r="4"/><path d="M12 18V2l7 4"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>',
     };
     const body = I[name] || I.sparkles;
     return `<svg class="lucide lucide-${name} ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -488,14 +489,16 @@ function createWidget(type, el, card, api) {
           const hi = $('[data-k="hi"]', el); if (hi) hi.textContent = `Good ${H < 5 ? 'night' : H < 12 ? 'morning' : H < 18 ? 'afternoon' : 'evening'}, ${user}`;
         }
         const day = (n - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5;
-        const wd = ((n.getDay() + 6) % 7 + day) / 7;
+        const wi = (n.getDay() + 6) % 7; // Monday-start index
+        const wd = (wi + day) / 7;
         const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
         const mo = (n.getDate() - 1 + day) / dim;
         const ys = new Date(n.getFullYear(), 0, 1), ye = new Date(n.getFullYear() + 1, 0, 1);
         const yr = (n - ys) / (ye - ys);
         const bars = [];
         if (showDay) bars.push(['Today', day, `${Math.round((1 - day) * 24)}h left`]);
-        bars.push(['This week', wd, `${Math.ceil((1 - wd) * 7)} days left`]);
+        // Full days remaining after today — same counting as the month bar
+        bars.push(['This week', wd, `${6 - wi} days left`]);
         bars.push(['This month', mo, `${dim - n.getDate()} days left`]);
         if (showYear) bars.push([String(n.getFullYear()), yr, `${Math.ceil((ye - n) / 864e5)} days left`]);
         const box = $('[data-k="pl"]', el);
@@ -581,40 +584,94 @@ function createWidget(type, el, card, api) {
     notes(o) {
       const fs = Math.max(11, Math.min(22, o.fontSize || 14));
       const md = o.markdown === true;
-      el.innerHTML = `${head('Notes')}<textarea class="inp" data-k="n" placeholder="Jot something down..." style="font-size:${fs}px"${md ? ' hidden' : ''}></textarea>`
-        + (md ? `<div class="md" data-k="md" style="font-size:${fs}px"></div>` : '')
-        + `<div class="head-row" style="padding:0 12px"><button data-k="tg" style="font-size:10px;opacity:.6">${md ? 'Edit' : 'Preview'}</button><div class="saved" data-k="sv" style="margin-left:auto"></div></div>`;
-      const n = $('[data-k="n"]', el);
-      const mdEl = $('[data-k="md"]', el);
-      if (!n) return;
-      n.value = localStorage.getItem('note') || '';
-      const renderMd = (text) => {
-        let h = esc(text);
-        h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>');
-        h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
-        h = h.replace(/^- (.+)$/gm, '<li>$1</li>').replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-        h = h.replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
-        h = h.replace(/\n/g, '<br>');
-        return h || '<span style="opacity:.4">Nothing yet...</span>';
+      // One line = one bullet note. Migrate the pre-1.7 textarea blob ("note") line-by-line.
+      let list = [];
+      let raw = null;
+      try { raw = localStorage.getItem('notes'); } catch { /* storage blocked */ }
+      if (raw === null) {
+        const blob = localStorage.getItem('note');
+        if (blob !== null) list = blob.split('\n').map((s) => s.trim()).filter(Boolean);
+        try { localStorage.setItem('notes', JSON.stringify(list)); localStorage.removeItem('note'); } catch { /* ignore */ }
+      } else {
+        try { list = JSON.parse(raw); } catch { list = []; }
+        if (!Array.isArray(list)) list = [];
+        list = list.filter((t) => typeof t === 'string');
+      }
+      const save = () => { try { localStorage.setItem('notes', JSON.stringify(list)); } catch { /* ignore */ } };
+      el.innerHTML = `${head('Notes', `<span class="muted" data-k="cnt" style="margin-left:auto;margin-right:4px"></span><button class="nadd" data-k="ad" title="Add note">${lucide('plus', '', 14)}</button>`)}`
+        + `<div class="paper"><input class="inp ninp" data-k="in" placeholder="Add a note and press Enter" style="font-size:${fs}px"><div class="list nlist" data-k="ls"></div></div>`;
+      const draw = () => {
+        const ls = $('[data-k="ls"]', el);
+        if (!ls) return;
+        ls.replaceChildren();
+        if (!list.length) {
+          const d = document.createElement('div');
+          d.className = 'nempty';
+          d.textContent = 'Nothing here yet.';
+          ls.append(d);
+        }
+        list.forEach((text, i) => {
+          const r = document.createElement('div');
+          r.className = 'nrow';
+          r.innerHTML = `<i class="nb"></i><span class="nt" style="font-size:${fs}px"></span><button class="del" title="Delete">&times;</button>`;
+          const span = $('.nt', r);
+          if (md && span) {
+            let h = esc(text);
+            h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
+            span.innerHTML = h;
+          } else if (span) span.textContent = text;
+          r.title = text;
+          r.onclick = () => edit(i);
+          const del = $('.del', r);
+          if (del) del.onclick = (e) => { e.stopPropagation(); list.splice(i, 1); save(); draw(); };
+          ls.append(r);
+        });
+        const cnt = $('[data-k="cnt"]', el);
+        if (cnt) cnt.textContent = list.length ? `${list.length} note${list.length === 1 ? '' : 's'}` : '';
       };
-      const update = () => { if (mdEl) mdEl.innerHTML = renderMd(n.value); };
-      let t;
-      n.addEventListener('input', () => {
-        const sv = $('[data-k="sv"]', el);
-        if (sv) { sv.style.opacity = 0.2; sv.textContent = 'Saving...'; }
-        clearTimeout(t);
-        t = setTimeout(() => { localStorage.setItem('note', n.value); if (sv) { sv.textContent = `Saved - ${n.value.length} chars`; sv.style.opacity = 1; } update(); }, 400);
-      });
-      const tg = $('[data-k="tg"]', el);
-      if (tg) tg.onclick = () => {
-        const showing = !n.hidden;
-        n.hidden = showing;
-        if (mdEl) mdEl.hidden = !showing;
-        tg.textContent = showing ? 'Edit' : 'Preview';
-        if (showing) update();
+      const edit = (i) => {
+        if (!list.length) return;
+        const ls = $('[data-k="ls"]', el);
+        const row = ls && ls.children[i];
+        if (!row || $('input', row)) return;
+        const span = $('.nt', row);
+        if (!span) return;
+        const inp = document.createElement('input');
+        inp.className = 'inp nedit';
+        inp.style.fontSize = fs + 'px';
+        inp.value = list[i];
+        row.replaceChild(inp, span);
+        inp.focus();
+        inp.select();
+        let done = false;
+        const commit = (ok) => {
+          if (done) return;
+          done = true;
+          const v = inp.value.trim();
+          if (ok && v && v !== list[i]) { list[i] = v; save(); }
+          draw();
+        };
+        inp.onkeydown = (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commit(true);
+          else if (e.key === 'Escape') commit(false);
+        };
+        inp.onblur = () => commit(true);
       };
-      if (md) update();
-      const sv = $('[data-k="sv"]', el); if (sv) sv.textContent = `${n.value.length} chars`;
+      const inEl = $('[data-k="in"]', el);
+      const add = () => {
+        if (!inEl) return;
+        const v = inEl.value.trim();
+        if (!v) { inEl.focus(); return; }
+        list.unshift(v);
+        inEl.value = '';
+        save();
+        draw();
+      };
+      if (inEl) inEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+      const ad = $('[data-k="ad"]', el);
+      if (ad) ad.onclick = add;
+      draw();
     },
 
     dock(o) {

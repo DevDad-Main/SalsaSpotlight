@@ -106,6 +106,7 @@ const DEFAULTS = {
   widgetScale: 1,
   search: { apps: true, files: true, folders: true, calc: true, commands: true, web: true, recents: true, maxResults: 8, engine: 'google' },
   widgetLayout: {},
+  widgetGridCols: 0,
   widgetGap: 12,
   widgetOpts: {
     clock: { h24: false, seconds: true, analog: false },
@@ -1172,7 +1173,7 @@ ipcMain.handle('state', () => {
       open: {},
       widgets: {},
       poller: false,
-      widgetLayout: {},
+  widgetLayout: {},
     };
   }
 });

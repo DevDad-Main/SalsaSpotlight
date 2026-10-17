@@ -139,7 +139,7 @@ const WIDGET_OPTS = {
   ],
   notes: [
     { key: 'widgetOpts.notes.fontSize', label: 'Font size', type: 'range', min: 11, max: 22, step: 1, fmt: (v) => v + 'px' },
-    { key: 'widgetOpts.notes.markdown', label: 'Markdown preview', desc: 'Render **bold**, *italic*, # headings, - lists', type: 'toggle' },
+    { key: 'widgetOpts.notes.markdown', label: 'Markdown preview', desc: 'Render **bold**, *italic* and `code` in notes', type: 'toggle' },
   ],
   dock: [
     { key: 'widgetOpts.dock.columns', label: 'Columns', type: 'range', min: 3, max: 8, step: 1, fmt: (v) => v },
@@ -521,7 +521,8 @@ function widgetPage() {
       try {
         const layout = state.widgetLayout || {};
         const open = Object.keys(state.open || {}).filter((t) => state.open[t]);
-        const blob = new Blob([JSON.stringify({ version: 1, layout, open, exported: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+        const cols = Number(state.prefs?.widgetGridCols) || 0;
+        const blob = new Blob([JSON.stringify({ version: 1, cols, layout, open, exported: new Date().toISOString() }, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'salsaspotlight-layout.json'; a.click(); URL.revokeObjectURL(a.href);
       } catch { /* export failed */ }
     } },
@@ -533,6 +534,8 @@ function widgetPage() {
         r.onload = () => {
           try {
             const d = JSON.parse(r.result);
+            // Column count the file was saved under (pre-1.7 files lack it → guess from resolution)
+            window.api.setSetting('widgetGridCols', Number(d.cols) || Math.max(3, Math.min(8, Math.floor(window.innerWidth / 400))));
             if (d.layout) window.api.setSetting('widgetLayout', d.layout);
             // Export writes open as an array of type names; older/hand-made files may use a map
             const openList = Array.isArray(d.open) ? d.open : Object.keys(d.open || {});

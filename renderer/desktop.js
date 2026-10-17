@@ -33,7 +33,10 @@
   }
 
   function initGrid() {
-    const cols = Math.max(3, Math.min(8, Math.floor(window.innerWidth / 400)));
+    // Fixed 12-column grid (~160px steps at 1080p). The old floor(width/400) gave
+    // just 4 columns — a single horizontal drag step was ~480px, about a widget's
+    // own width, which felt like teleporting instead of dragging.
+    const cols = 12;
     // Nominal 22-row design, but with a FRACTIONAL row height so rows tile the work
     // area exactly — no leftover strip at the bottom, just the 12px grid margin above
     // the taskbar (instead of up to ~45px on some taskbar heights).
@@ -185,14 +188,31 @@
     }
     window.api.setSetting('widgetLayout', layout);
     appliedLayout = JSON.stringify(layout); // our own write — don't re-apply the echo
+    if (state?.prefs?.widgetGridCols !== grid.opts.column) window.api.setSetting('widgetGridCols', grid.opts.column);
   }
 
   function loadLayout(saved) {
     if (!saved || !grid) return;
+    const curCols = grid.opts.column;
+    // Pre-1.7 grids used 3–8 columns (floor(width/400)); widgetGridCols records the grid
+    // a layout was saved under (absent/0 = pre-1.7 → best guess from the current resolution).
+    const savedCols = Number(state?.prefs?.widgetGridCols) || Math.max(3, Math.min(8, Math.floor(window.innerWidth / 400)));
+    const k = savedCols > 0 && savedCols !== curCols ? curCols / savedCols : 1;
+    const maxRows = gridRows();
     for (const [type, pos] of Object.entries(saved)) {
-      if (!instances[type]) continue;
-      grid.update(instances[type].item, { x: pos.x, y: pos.y, w: pos.w, h: pos.h });
+      if (!instances[type] || !pos) continue;
+      const px = Number(pos.x) || 0;
+      const pw = Number(pos.w) || 1;
+      const ph = Number(pos.h) || DEFAULT_H[type] || 4;
+      let x = k === 1 ? px : Math.round(px * k);
+      let w = k === 1 ? pw : Math.round(pw * k);
+      w = Math.max(1, Math.min(curCols, w));
+      const h = Math.max(1, Math.min(maxRows, ph));
+      x = Math.max(0, Math.min(x, curCols - w));
+      const y = Math.max(0, Math.min(Number(pos.y) || 0, maxRows - h));
+      grid.update(instances[type].item, { x, y, w, h });
     }
+    if (k !== 1 && Object.keys(saved).length) saveLayout(); // persist the scaled coords + the new column count
   }
 
   // ── State handling ──
