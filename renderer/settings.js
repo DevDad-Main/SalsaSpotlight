@@ -91,7 +91,8 @@ const WIDGET_OPTS = {
   clock: [
     { key: 'widgetOpts.clock.h24', label: '24-hour time', type: 'toggle' },
     { key: 'widgetOpts.clock.seconds', label: 'Show seconds', type: 'toggle' },
-    { key: 'widgetOpts.clock.analog', label: 'Analog face', type: 'toggle' },
+    { key: 'widgetOpts.clock.style', label: 'Clock style', desc: 'Digital, analog face, or old-school split-flap flip clock', type: 'select',
+      options: [['digital', 'Digital'], ['analog', 'Analog'], ['flip', 'Flip clock']] },
   ],
   worldclock: [
     { key: 'widgetOpts.worldclock.zones', label: 'Time zones', desc: 'Comma-separated IANA timezone names (e.g. America/New_York, Europe/London, Asia/Tokyo, Australia/Sydney)', type: 'text' },
@@ -230,7 +231,7 @@ function control(item) {
     }
     case 'wsize': {
       input = document.createElement('select');
-      [['s', 'Small'], ['m', 'Medium'], ['l', 'Large'], ['xl', 'Extra large']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; input.append(o); });
+      [['xs', 'Mini'], ['s', 'Small'], ['m', 'Medium'], ['l', 'Large'], ['xl', 'Extra large']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; input.append(o); });
       input.style.minWidth = '120px';
       input.onchange = () => window.api.setWidgetSize(item.widget, input.value);
       wrap.append(input);

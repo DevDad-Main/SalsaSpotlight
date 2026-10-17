@@ -64,8 +64,8 @@ const WIDGETS = {
   calendarEvents: { title: 'Upcoming Events', size: [330, 260] },
   media: { title: 'Now Playing', size: [330, 220] },
 };
-const SIZES = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
-const SIZE_LABELS = { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
+const SIZES = { xs: 0.5, s: 0.8, m: 1, l: 1.3, xl: 1.7 };
+const SIZE_LABELS = { xs: 'Mini', s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' };
 const ENGINES = {
   google: 'https://www.google.com/search?q=',
   bing: 'https://www.bing.com/search?q=',
@@ -109,7 +109,7 @@ const DEFAULTS = {
   widgetGridCols: 0,
   widgetGap: 12,
   widgetOpts: {
-    clock: { h24: false, seconds: true, analog: false },
+    clock: { h24: false, seconds: true, analog: false, style: 'digital' },
     worldclock: { zones: 'America/New_York,Europe/London,Asia/Tokyo' },
     weather: { city: 'auto', units: 'c', hours: true },
     system: { graph: true, battery: true, info: true, gpu: true },
@@ -159,6 +159,8 @@ function loadSettings() {
     if (raw.prefs?.v !== 2) prefs.widgetMode = 'desktop';
     // migrate old spotlightStyle pref to spotlightEffect
     if (!raw.prefs?.spotlightEffect && raw.prefs?.spotlightStyle === 'acrylic') prefs.spotlightEffect = 'acrylic';
+    // pre-1.8 clock used the analog toggle; carry it over to the style select
+    if (raw.prefs?.clock?.analog && !raw.prefs?.clock?.style) prefs.clock.style = 'analog';
   } catch { /* first run */ }
   prefs.launchAtLogin = app.getLoginItemSettings().openAtLogin;
 }

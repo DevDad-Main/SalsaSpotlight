@@ -18,9 +18,9 @@
     clipboard: 7, gpu: 6, network: 5, countdown: 4, quote: 3,
     pomodoro: 6, habits: 6, uptime: 3, speedtest: 3, calendarEvents: 6,
   };
-  const MIN_H = { clock: 3, specs: 7, calendar: 6, weather: 4, system: 5, timer: 5, pomodoro: 5 };
-  // Mirrors main.js SIZES — used to scale grid dimensions for the S/M/L/xL menu
-  const SIZE_MUL = { s: 0.8, m: 1, l: 1.3, xl: 1.7 };
+  const MIN_H = { clock: 3, worldclock: 3, specs: 5, calendar: 4, weather: 4, system: 4, timer: 4, pomodoro: 4, progress: 4, countdown: 3, dock: 3, gpu: 4, network: 4, quote: 3, speedtest: 4, uptime: 3, disks: 3 };
+  // Mirrors main.js SIZES — used to scale grid dimensions for the Mini/Small/Medium/Large/xL menu
+  const SIZE_MUL = { xs: 0.5, s: 0.8, m: 1, l: 1.3, xl: 1.7 };
   let lastScale = null; // last applied prefs.widgetScale (for ratio-based scaling)
 
   // ── Grid setup ──
@@ -207,7 +207,9 @@
       let x = k === 1 ? px : Math.round(px * k);
       let w = k === 1 ? pw : Math.round(pw * k);
       w = Math.max(1, Math.min(curCols, w));
-      const h = Math.max(1, Math.min(maxRows, ph));
+      // Enforce MIN_H on restore so layouts saved before a floor was raised
+      // (e.g. weather/timer mini = 3 rows in ≤1.7) get the extra row back.
+      const h = Math.min(maxRows, Math.max(MIN_H[type] || 1, ph));
       x = Math.max(0, Math.min(x, curCols - w));
       const y = Math.max(0, Math.min(Number(pos.y) || 0, maxRows - h));
       grid.update(instances[type].item, { x, y, w, h });

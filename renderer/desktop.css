@@ -20,6 +20,10 @@ body.hidden #grid { opacity: 0; pointer-events: none; }
 .grid-stack-item-content {
   overflow: visible !important;
   transition: none !important;
+  /* Second container named "card" so @container rules can style the .card element itself
+     (a container query can never match its own container) */
+  container-type: size;
+  container-name: card;
 }
 
 /* Drop placeholder — subtle glow */

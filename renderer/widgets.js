@@ -133,7 +133,8 @@ function createWidget(type, el, card, api) {
   const W = {
     clock(o) {
       const h12 = (H) => H % 12 || 12;
-      if (o.analog) {
+      const st = ['analog', 'flip', 'digital'].includes(o.style) ? o.style : (o.analog ? 'analog' : 'digital');
+      if (st === 'analog') {
         let ticks = '';
         for (let i = 0; i < 60; i++) ticks += `<line y1="-${i % 5 ? 44 : 41}" y2="-47" class="tk${i % 5 ? '' : ' big'}" transform="rotate(${i * 6})"/>`;
         el.innerHTML = `${head('Clock')}<div class="analog"><svg viewBox="-50 -50 100 100">${ticks}<line data-k="hh" class="hand h" y2="-24"/><line data-k="mh" class="hand m" y2="-34"/><line data-k="sh" class="hand s" y2="-38"/><circle r="2.5" class="pin"/></svg><div><div class="bigday grad" data-k="dd"></div><div class="date" data-k="dm"></div></div></div>`;
@@ -146,6 +147,65 @@ function createWidget(type, el, card, api) {
           const dd = $('[data-k="dd"]', el); if (dd) dd.textContent = n.toLocaleDateString([], { weekday: 'long' });
           const dm = $('[data-k="dm"]', el); if (dm) dm.textContent = n.toLocaleDateString([], { month: 'long', day: 'numeric' });
         }, 1000);
+        return;
+      }
+      if (st === 'flip') {
+        el.innerHTML = `${head('Local time')}<div class="flip" data-k="fl"></div><div class="date" data-k="d"></div>`;
+        const fl = $('[data-k="fl"]', el);
+        if (!fl) return;
+        const mkCard = () => {
+          const c = document.createElement('div');
+          c.className = 'fcard';
+          c.innerHTML = '<div class="fcell ftop"><span></span></div><div class="fcell fbot"><span></span></div>';
+          fl.append(c);
+          return c;
+        };
+        const mkSep = () => { const s = document.createElement('div'); s.className = 'fsep'; s.textContent = ':'; fl.append(s); };
+        const cards = [mkCard(), mkCard()];
+        mkSep();
+        cards.push(mkCard(), mkCard());
+        let ampm = null;
+        if (o.seconds) { mkSep(); cards.push(mkCard(), mkCard()); }
+        if (!o.h24) { ampm = document.createElement('div'); ampm.className = 'fampm'; fl.append(ampm); }
+        const mkFlap = (cls, ch) => {
+          const f = document.createElement('div');
+          f.className = 'fflap ' + cls;
+          const s = document.createElement('span');
+          s.textContent = ch;
+          f.append(s);
+          return f;
+        };
+        const setCard = (c, ch) => {
+          const top = $('.ftop span', c), bot = $('.fbot span', c);
+          if (!top || !bot || ch === undefined) return;
+          const cur = c.dataset.ch;
+          if (ch === cur) return;
+          c.querySelectorAll('.fflap').forEach((n) => n.remove());
+          // First paint or animations disabled (body.noanim): swap instantly
+          if (cur === undefined || document.body.classList.contains('noanim')) {
+            top.textContent = ch; bot.textContent = ch; c.dataset.ch = ch; return;
+          }
+          c.dataset.ch = ch; // commit immediately so a mid-flip interrupt stays coherent
+          const leave = mkFlap('ftop', cur); // old top half swings down and away
+          const arrive = mkFlap('fbot', ch); // new bottom half swings down into place
+          c.append(leave, arrive);
+          top.textContent = ch; // revealed underneath the leaving flap
+          let lw = false, aw = false;
+          const endLeave = () => { if (lw) return; lw = true; bot.textContent = ch; leave.remove(); };
+          const endArrive = () => { if (aw) return; aw = true; bot.textContent = ch; arrive.remove(); };
+          leave.addEventListener('animationend', endLeave, { once: true });
+          arrive.addEventListener('animationend', endArrive, { once: true });
+          // Timeout fallbacks: animationend never fires while animations are disabled
+          setTimeout(endLeave, 320);
+          setTimeout(endArrive, 640);
+        };
+        every(() => {
+          const n = new Date(), H = n.getHours();
+          const target = pad(o.h24 ? H : h12(H)) + pad(n.getMinutes()) + (o.seconds ? pad(n.getSeconds()) : '');
+          cards.forEach((c, i) => setCard(c, target[i]));
+          if (ampm) ampm.textContent = H < 12 ? 'AM' : 'PM';
+          const d = $('[data-k="d"]', el); if (d) d.textContent = n.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+        }, 250);
         return;
       }
       el.innerHTML = `${head('Local time')}<div class="time grad"><span data-k="hm"></span><small data-k="sc"></small></div><div class="date" data-k="d"></div><div class="bar"><i data-k="sb"></i></div>`;

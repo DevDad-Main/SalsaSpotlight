@@ -89,6 +89,23 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .pin { fill: var(--orange); }
 .bigday { font-size: 26px; font-weight: 300; }
 
+/* flip clock (old-school split-flap) */
+.w-clock .flip { display: flex; align-items: center; justify-content: center; gap: 0.05em; font-size: min(14cqw, 38cqh); line-height: 1; }
+.w-clock .fcard { position: relative; width: 0.62em; height: 1em; flex: none; perspective: 4em; border-radius: 0.07em; background: #14141a; box-shadow: 0 0.04em 0.14em rgba(0, 0, 0, 0.35); }
+.w-clock .fcell { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; z-index: 1; }
+.w-clock .ftop { top: 0; border-radius: 0.07em 0.07em 0 0; border-bottom: 1px solid rgba(0, 0, 0, 0.6); background: linear-gradient(180deg, #34343d, #26262e); }
+.w-clock .fbot { bottom: 0; border-radius: 0 0 0.07em 0.07em; background: linear-gradient(180deg, #22222a, #17171d); border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.w-clock .fcell span, .w-clock .fflap span { position: absolute; left: 0; right: 0; height: 200%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #f4f4f7; letter-spacing: -0.03em; }
+.w-clock .ftop span, .w-clock .fflap.ftop span { top: 0; }
+.w-clock .fbot span, .w-clock .fflap.fbot span { top: -100%; }
+.w-clock .fflap { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; z-index: 3; backface-visibility: hidden; }
+.w-clock .fflap.ftop { transform-origin: bottom; animation: flipLeave 0.22s ease-in forwards; }
+.w-clock .fflap.fbot { transform-origin: top; animation: flipArrive 0.22s 0.22s cubic-bezier(0.3, 0.9, 0.4, 1) both; }
+.w-clock .fsep { display: flex; align-items: center; justify-content: center; width: 0.3em; height: 1em; flex: none; font-size: 0.75em; font-weight: 700; color: var(--muted); }
+.w-clock .fampm { flex: none; margin-left: 0.1em; padding: 0.2em 0.18em; border-radius: 0.12em; background: rgba(var(--accent-rgb), 0.16); color: var(--accent); font-size: 0.8em; font-weight: 700; letter-spacing: 0.04em; }
+@keyframes flipLeave { from { transform: rotateX(0deg); filter: brightness(1); } to { transform: rotateX(-90deg); filter: brightness(0.5); } }
+@keyframes flipArrive { from { transform: rotateX(90deg); filter: brightness(0.5); } to { transform: rotateX(0deg); filter: brightness(1); } }
+
 /* gauges + sparkline */
 .gauges { display: flex; justify-content: space-around; }
 .g { position: relative; width: 96px; height: 96px; }
@@ -121,6 +138,9 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .row.hl { background: color-mix(in srgb, var(--green) 15%, transparent); }
 
 /* disks + progress bars */
+.dl { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.dl::-webkit-scrollbar { width: 3px; }
+.dl::-webkit-scrollbar-thumb { background: var(--track); border-radius: 3px; }
 .disk { margin-bottom: 12px; }
 .disk .top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
 .track { height: 9px; border-radius: 9px; background: var(--track); overflow: hidden; }
@@ -471,11 +491,104 @@ body.noshadow .card { box-shadow: none; }
   .w-calendarEvents .row { padding: 6px 8px; }
 }
 
-/* Shrink padding on small cards */
-@container card (max-width: 280px) {
+/* ── Small & mini cards (1-column widths, Mini size) ──
+   NOTE: the .card padding rule needs .grid-stack-item-content to also be a container
+   named "card" — a @container rule can never match its own container element. */
+@container card (max-width: 260px) {
   .card { padding: 12px 14px; }
-  .w-clock .time { font-size: 44px; }
-  .w-weather .wtemp { font-size: 38px; }
+  .label { font-size: 11.5px; gap: 6px; margin-bottom: 6px; }
+  .w-clock .time { font-size: 38px; }
+  .w-clock .time small { font-size: 13px; }
+  .w-clock .date { font-size: 11.5px; margin-top: 5px; }
+  .w-clock .analog svg { width: 78px; height: 78px; }
+  .w-clock .bigday { font-size: 18px; }
+  .w-clock .bar { margin-top: 8px; }
+  .w-uptime .time, .w-speedtest .time { font-size: 36px; }
+  .hello { font-size: 15px; margin-bottom: 7px; }
+  .pr { margin-bottom: 7px; }
+  .pr .top { font-size: 11px; margin-bottom: 3px; }
+  .track { height: 7px; }
+  .ringwrap { width: 92px; height: 92px; }
+  .ringwrap .tm { font-size: 24px; }
+  .wtemp { font-size: 36px; }
+  .wicon { font-size: 30px; }
+  .wmeta { gap: 4px 8px; font-size: 10.5px; margin-top: 3px; }
+  .hours { margin-top: 5px; padding-top: 5px; }
+  .hour { font-size: 9.5px; }
+  .hour span { height: 16px; line-height: 16px; }
+  .cal-head { margin-bottom: 4px; }
+  .cal-head span { font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-head button { width: 20px; height: 20px; flex: none; }
+  .grid { font-size: 11px; gap: 1px; }
+  .grid .dn { font-size: 9.5px; }
+  .gauges { gap: 4px; }
+  .g { width: 46px; height: 46px; }
+  .g circle { stroke-width: 8; }
+  .g .v { font-size: 13px; }
+  .g .v small { font-size: 8px; }
+  .w-countdown .cdn { font-size: 54px; }
+  .w-countdown .cdl { font-size: 12px; }
+  .row { gap: 6px; padding: 3px 5px; }
+  .row .ri { font-size: 13px; width: 18px; height: 18px; }
+  .row small { font-size: 10px; }
+  .row b { font-size: 11px; }
+  .todo { font-size: 12px; padding: 6px 3px; }
+  .todo .cb { width: 16px; height: 16px; }
+  .tile { font-size: 9.5px; border-radius: 12px; padding: 5px 2px; }
+  .tile img { width: 26px; height: 26px; }
+  .clip { font-size: 11.5px; padding: 7px 9px; }
+  .w-notes .nrow { min-height: 24px; }
+  .w-notes .ninp { margin: 7px 8px 3px 38px; padding: 5px 8px; }
+  .w-notes .nlist { padding: 0 6px 6px 38px; }
+  .w-notes .paper::after { left: 26px; }
+  .analog-clocks { grid-template-columns: repeat(auto-fit, minmax(46px, 1fr)); gap: 6px; padding: 2px 0; }
+  .ac-dial { width: 48px; height: 48px; }
+  .ac-info b { font-size: 10.5px; max-width: 58px; }
+  .ac-info small { font-size: 9px; }
+}
+@container card (max-width: 175px) {
+  .label { font-size: 10.5px; }
+  .label [data-k="cnt"] { display: none; }
+  .w-clock .flip { font-size: min(13cqw, 36cqh); }
+  .w-clock .time { font-size: 32px; }
+  .w-clock .time small { font-size: 11.5px; }
+  .w-clock .analog svg { width: 64px; height: 64px; }
+  .hello { font-size: 13px; margin-bottom: 5px; }
+  .pr { margin-bottom: 5px; }
+  .pr .top { font-size: 10px; margin-bottom: 2px; gap: 8px; }
+  .pr .top span:first-child { flex: none; white-space: nowrap; }
+  .pr .top span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track { height: 6px; }
+  .wtemp { font-size: 30px; }
+  .wicon { font-size: 26px; }
+  .ringwrap { width: 80px; height: 80px; }
+  .ringwrap .tm { font-size: 21px; }
+  .g { width: 40px; height: 40px; }
+  .g .v { font-size: 12px; }
+  .w-countdown .cdn { font-size: 46px; }
+  .wcity { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .w-weather .wmeta + .wmeta { display: none; }
+  .w-weather .hour span { height: 13px; line-height: 13px; font-size: 13px; margin: 1px 0; }
+  .w-weather .hour span svg { width: 13px; height: 13px; }
+  .w-weather .hour b { font-size: 10px; }
+  .w-system .rows { display: none; }
+  .w-timer [data-k="pre"] { display: none; }
+  .analog-clocks { grid-template-columns: repeat(auto-fit, minmax(36px, 1fr)); gap: 4px; }
+  .ac-dial { width: 40px; height: 40px; }
+  .ac-info { margin-top: 3px; }
+  .ac-info b { max-width: 44px; font-size: 9.5px; }
+  .ac-info small { font-size: 8.5px; margin-top: 0; }
+  .net b { font-size: 17px; }
+  .net small { font-size: 10px; }
+  .w-notes .nrow { position: relative; gap: 6px; }
+  .w-notes .del { position: absolute; right: 0; top: 50%; transform: translateY(-50%); padding: 2px 5px; background: rgba(255, 255, 255, 0.72); border-radius: 6px; }
+  .w-notes .nlist { padding: 0 4px 6px 32px; }
+  .w-notes .ninp { margin: 6px 6px 3px 32px; }
+  .w-notes .paper::after { left: 24px; }
+}
+@container card (max-height: 170px) {
+  .label { margin-bottom: 5px; }
+  .w-clock .date { margin-top: 4px; }
 }
 
 /* ── Habit heatmap ── */
