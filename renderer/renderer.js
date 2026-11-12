@@ -97,6 +97,8 @@ function render() {
     if (group !== lastGroup) { list.append(header(group)); lastGroup = group; }
     const li = document.createElement('li');
     li.className = 'row' + (i === sel ? ' sel' : '') + (top ? ' top' : '');
+    li.dataset.kind = r.kind;
+    li.style.animationDelay = Math.min(i * 16, 128) + 'ms';
     const ico = document.createElement('div');
     ico.className = 'ico';
     ico.innerHTML = ICONS[r.kind];
@@ -136,6 +138,16 @@ function mark() {
   if (detailsOpen) renderDetails();
 }
 
+// Highlight the quick chip whose filter is currently active in the query
+const chips = { apps: $('chip-apps'), folders: $('chip-folders'), files: $('chip-files'), calc: $('chip-calc') };
+function updateChips() {
+  const v = input.value.trim().toLowerCase();
+  if (chips.apps) chips.apps.classList.toggle('on', v.startsWith('type:app'));
+  if (chips.folders) chips.folders.classList.toggle('on', v.startsWith('type:folder'));
+  if (chips.files) chips.files.classList.toggle('on', v.startsWith('type:file'));
+  if (chips.calc) chips.calc.classList.toggle('on', /^\d/.test(v));
+}
+
 function run(reveal) {
   const r = results[sel];
   if (r) window.api.run(r, input.value, reveal);
@@ -152,6 +164,7 @@ async function update() {
     return;
   }
   setKeysOpen(false);
+  updateChips();
   const r = await window.api.search(input.value);
   if (my !== seq) return;
   results = arrange(r);

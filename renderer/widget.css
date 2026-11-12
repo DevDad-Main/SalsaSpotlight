@@ -75,7 +75,7 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .w-clock .content { justify-content: center; align-items: center; text-align: center; }
 .time { font: 200 52px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -0.03em; }
 .time small { font-size: 16px; font-weight: 400; margin-left: 6px; letter-spacing: 0; color: var(--muted); }
-.date { margin-top: 8px; color: var(--red); font-size: 13px; font-weight: 600; }
+.date { margin-top: 8px; color: var(--accent); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
 .bar { margin-top: auto; height: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--orange); transition: width 0.9s linear; }
 .analog { display: flex; align-items: center; justify-content: center; gap: 16px; flex: 1; }
@@ -159,19 +159,15 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .wmeta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11.5px; margin: 4px 0 0; color: var(--muted); }
 .hours { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--track); }
 .hour { text-align: center; font-size: 10.5px; color: var(--muted); }
-.hour span { display: block; height: 20px; line-height: 20px; margin: 2px 0; }
+.hour span { display: block; height: 20px; line-height: 20px; margin: 2px 0; font-size: 18px; }
 .hour span svg { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
 .hour b { color: var(--text); font-weight: 500; font-size: 11px; }
-.w-weather .hour b { color: #fff; }
-.wmsg { margin: auto; text-align: center; color: var(--muted); font-size: 13px; }
-.hour span { display: block; font-size: 18px; margin: 2px 0; }
-.hour b { color: var(--text); font-weight: 500; }
 .w-weather .hour b { color: #fff; }
 .wmsg { margin: auto; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* calendar */
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.cal-head span { -webkit-app-region: no-drag; cursor: pointer; color: var(--red); font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.cal-head span { -webkit-app-region: no-drag; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.9; }
 .cal-head button { background: var(--tile); border: 0; border-radius: 50%; width: 24px; height: 24px; }
 /* analog world clocks */
 .analog-clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 10px; align-items: center; justify-content: space-around; flex: 1; padding: 4px 0; }
@@ -193,7 +189,7 @@ body.noanim *, body.noanim *::before { animation: none !important; transition: n
 .grid .d { display: grid; place-items: center; position: relative; }
 .grid .d.o { color: var(--muted); opacity: 0.5; }
 .grid .d.t { z-index: 0; color: #fff; font-weight: 700; }
-.grid .d.t::before { content: ''; position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(1.9em, 90%); aspect-ratio: 1; border-radius: 50%; background: var(--red); }
+.grid .d.t::before { content: ''; position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(1.9em, 90%); aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
 
 /* greeting */
 .hello { font-size: 19px; font-weight: 600; margin-bottom: 12px; }

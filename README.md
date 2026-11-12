@@ -12,7 +12,7 @@ Press <kbd>Alt</kbd> + <kbd>Space</kbd> and search your whole PC. No admin right
 
 ## Features
 
-- **Instant search** across apps, files and folders, with fuzzy matching and results that learn what you open most.
+- **Instant search** across apps, files and folders — multi-word aware, typo-tolerant ("setings" finds Settings), with frecency-ranked results that learn what you open most.
 - **Acrylic glass UI** with rounded corners, smooth animations, your Windows light or dark theme and a custom accent colour.
 - **Built-in extras:** calculator (`12*7+3`), web search, clipboard history (type `clip`), and commands such as Settings, Task Manager and Lock PC.
 - **13 floating desktop widgets** that appear only when you are on the desktop:

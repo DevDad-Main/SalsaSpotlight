@@ -57,6 +57,8 @@ function createWidget(type, el, card, api) {
       coffee: '<path d="M10 2v2M14 2v2M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
       play: '<polygon points="5 3 19 12 5 21 5 3"/>',
       pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+      skipBack: '<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/>',
+      skipForward: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>',
       rotateCcw: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
       piggyBank: '<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
       wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>',
@@ -223,60 +225,68 @@ function createWidget(type, el, card, api) {
       const zones = rawZones.split(',').map((z) => z.trim()).filter(Boolean).slice(0, 4);
       el.innerHTML = `${head('World Clock')}<div class="analog-clocks" data-k="ac"></div>`;
       const box = $('[data-k="ac"]', el);
-      every(() => {
-        const now = new Date();
-        box.replaceChildren();
-        zones.forEach((z) => {
-          const item = document.createElement('div');
-          item.className = 'ac-item';
-          try {
-            const fTime = (opt) => new Intl.DateTimeFormat([], { timeZone: z, ...opt });
-            const parts = fTime({ hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false }).formatToParts(now);
-            const getP = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
-            const H = getP('hour') % 12;
-            const M = getP('minute');
-            const S = getP('second');
-            const hDeg = (H + M / 60) * 30;
-            const mDeg = (M + S / 60) * 6;
-            const sDeg = S * 6;
-            const cityName = z.split('/').pop().replace(/_/g, ' ');
-            const localOffset = -now.getTimezoneOffset();
-            const targetStr = fTime({ timeZoneName: 'shortOffset' }).format(now);
-            const match = targetStr.match(/GMT([+-]\d+)?/i);
-            const targetOffsetHours = match && match[1] ? parseInt(match[1], 10) : 0;
-            const diffHours = targetOffsetHours - Math.round(localOffset / 60);
-            const diffStr = diffHours === 0 ? 'Same time' : (diffHours > 0 ? `+${diffHours}HRS` : `${diffHours}HRS`);
-            item.innerHTML = `
-              <svg class="ac-dial" viewBox="-50 -50 100 100">
-                <circle r="46" class="ac-face"/>
-                <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(0)"/>
-                <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(90)"/>
-                <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(180)"/>
-                <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(270)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(30)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(60)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(120)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(150)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(210)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(240)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(300)"/>
-                <line y1="-40" y2="-43" class="ac-tick" transform="rotate(330)"/>
-                <line class="ac-hand hour" y2="-22" transform="rotate(${hDeg})"/>
-                <line class="ac-hand min" y2="-32" transform="rotate(${mDeg})"/>
-                <line class="ac-hand sec" y2="-36" transform="rotate(${sDeg})"/>
-                <circle r="2" class="ac-pin"/>
-              </svg>
-              <div class="ac-info">
-                <b>${esc(cityName)}</b>
-                <small>${esc(diffStr)}</small>
-              </div>
-            `;
-          } catch {
-            item.innerHTML = `<div class="ac-info"><b>${esc(z)}</b><small>Invalid zone</small></div>`;
-          }
+      if (!box) return;
+      // Build each dial ONCE and cache its Intl formatters + element refs — the
+      // per-second tick only rotates hands and refreshes labels (cheap on GFN).
+      const dials = [];
+      for (const z of zones) {
+        let fmtHM, fmtOff;
+        try { fmtHM = new Intl.DateTimeFormat([], { timeZone: z, hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false }); fmtOff = new Intl.DateTimeFormat([], { timeZone: z, timeZoneName: 'shortOffset' }); } catch { /* invalid zone */ }
+        const item = document.createElement('div');
+        item.className = 'ac-item';
+        if (!fmtHM) {
+          item.innerHTML = `<div class="ac-info"><b>${esc(z)}</b><small>Invalid zone</small></div>`;
           box.append(item);
-        });
-      }, 1000);
+          continue;
+        }
+        const cityName = z.split('/').pop().replace(/_/g, ' ');
+        item.innerHTML = `
+          <svg class="ac-dial" viewBox="-50 -50 100 100">
+            <circle r="46" class="ac-face"/>
+            <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(0)"/>
+            <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(90)"/>
+            <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(180)"/>
+            <line y1="-38" y2="-43" class="ac-tick major" transform="rotate(270)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(30)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(60)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(120)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(150)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(210)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(240)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(300)"/>
+            <line y1="-40" y2="-43" class="ac-tick" transform="rotate(330)"/>
+            <line class="ac-hand hour" y2="-22"/>
+            <line class="ac-hand min" y2="-32"/>
+            <line class="ac-hand sec" y2="-36"/>
+            <circle r="2" class="ac-pin"/>
+          </svg>
+          <div class="ac-info">
+            <b>${esc(cityName)}</b>
+            <small></small>
+          </div>
+        `;
+        box.append(item);
+        dials.push({ z, fmtHM, fmtOff, h: $('.ac-hand.hour', item), m: $('.ac-hand.min', item), s: $('.ac-hand.sec', item), off: $('small', item) });
+      }
+      const tick = () => {
+        const now = new Date();
+        for (const d of dials) {
+          try {
+            const parts = d.fmtHM.formatToParts(now);
+            const getP = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
+            const H = getP('hour') % 12, M = getP('minute'), S = getP('second');
+            d.h.style.transform = `rotate(${(H + M / 60) * 30}deg)`;
+            d.m.style.transform = `rotate(${(M + S / 60) * 6}deg)`;
+            d.s.style.transform = `rotate(${S * 6}deg)`;
+            const match = d.fmtOff.format(now).match(/GMT([+-]\d+)?/i);
+            const targetOffsetHours = match && match[1] ? parseInt(match[1], 10) : 0;
+            const diffHours = targetOffsetHours - Math.round(-now.getTimezoneOffset() / 60);
+            d.off.textContent = diffHours === 0 ? 'Same time' : (diffHours > 0 ? `+${diffHours}HRS` : `${diffHours}HRS`);
+          } catch { /* zone broke mid-session */ }
+        }
+      };
+      tick();
+      every(tick, 1000);
     },
 
     async weather(o) {
@@ -1030,9 +1040,18 @@ function createWidget(type, el, card, api) {
         if (!ls) return;
         if (!events.length) {
           const year = now.getFullYear();
+          // Anonymous Gregorian algorithm — real Easter date (was hard-coded Mar 20)
+          const easter = () => {
+            const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+            const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+            const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+            const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+            const m = Math.floor((a + 11 * h + 22 * l) / 451);
+            return new Date(year, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+          };
           const dates = [
             ['New Year', new Date(year, 0, 1)], ['Valentine\'s Day', new Date(year, 1, 14)],
-            ['Easter', new Date(year, 3, 20)], ['Christmas', new Date(year, 11, 25)],
+            ['Easter', easter()], ['Christmas', new Date(year, 11, 25)],
           ].filter(([, d]) => d > now).sort((a, b) => a[1] - b[1]).slice(0, maxEvents);
           if (dates.length) {
             ls.replaceChildren();
@@ -1064,12 +1083,12 @@ function createWidget(type, el, card, api) {
       el.innerHTML = `${head('Now Playing')}`
         + `<div class="med"><div class="mart" data-k="art">${lucide('music', '', 28)}</div>`
         + `<div class="minfo"><b data-k="ti">Nothing playing</b><small data-k="ar">Play something in any app</small></div></div>`
-        + (showControls ? `<div class="btns med-ctrl"><button data-k="pv">${lucide('rotateCcw', '', 15)}</button><button class="main" data-k="tg">${lucide('play', '', 16)}</button><button data-k="nx">${lucide('play', '', 15)}</button></div>` : '')
+        + (showControls ? `<div class="btns med-ctrl"><button data-k="pv">${lucide('skipBack', '', 15)}</button><button class="main" data-k="tg">${lucide('play', '', 16)}</button><button data-k="nx">${lucide('skipForward', '', 15)}</button></div>` : '')
         + '<div class="foot" data-k="ap"></div>';
       const PLAY_SVG = lucide('play', '', 16);
       const PAUSE_SVG = lucide('pause', '', 16);
-      const PREV_SVG = lucide('rotateCcw', '', 15);
-      const NEXT_SVG = lucide('play', '', 15);
+      const PREV_SVG = lucide('skipBack', '', 15);
+      const NEXT_SVG = lucide('skipForward', '', 15);
       const tk = mountSeq;
       let last = null;
       const render = (d) => {

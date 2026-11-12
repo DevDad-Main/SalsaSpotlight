@@ -260,50 +260,88 @@ function commandList(q = '') {
   ];
 }
 
+// ── Search scoring ────────────────────────────────────────────────
+// Per-word tiers: exact name 1000 · prefix 820 · word-boundary substring 700 ·
+// mid-word substring 520 · fuzzy subsequence (gap-penalised) ≤ ~460.
+// Multi-word queries must match EVERY word and are damped by √n so a single
+// perfect hit still outranks several partial ones.
+
+const BOUNDARY = /[\s._\-([/]/;
+
+function subseqScore(t, q) {
+  // Subsequence with gap penalty + streak/boundary bonuses (t, q lowercase).
+  let ti = 0, score = 0, prev = -1, run = 0;
+  for (let qi = 0; qi < q.length; qi++) {
+    const found = t.indexOf(q[qi], ti);
+    if (found === -1) return 0; // character not found — no match
+    const gap = found - prev - 1;
+    if (gap > 0) score -= Math.min(gap * 2, 24); // spread-out matches rank lower
+    else if (qi > 0) { run++; score += 6; }      // consecutive streak bonus
+    if (found === 0 || BOUNDARY.test(t[found - 1])) score += 22; // word-boundary bonus
+    score += 8;
+    prev = found; ti = found + 1;
+  }
+  return Math.max(0, score - Math.min(t.length * 0.3, 30)); // prefer shorter names
+}
+
+function wordScore(l, w) {
+  if (l === w) return 1000;
+  if (l.startsWith(w)) return 820;
+  const i = l.indexOf(w);
+  if (i > -1) return i === 0 || BOUNDARY.test(l[i - 1]) ? 700 : 520;
+  return subseqScore(l, w);
+}
+
 // Fuzzy match score: higher = better. Returns 0 if no match.
 function fuzzyScore(text, query) {
-  if (!query) return 1;
-  const t = text.toLowerCase();
-  const q = query.toLowerCase();
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return 1;
+  const t = String(text).toLowerCase();
   if (t === q) return 1000;
-  if (t.startsWith(q)) return 800;
-  if (t.includes(q)) return 600;
-  // Subsequence matching with bonuses for consecutive/word-boundary matches
-  let ti = 0, score = 0, consecutive = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    const ch = q[qi];
-    let found = -1;
-    for (let i = ti; i < t.length; i++) {
-      if (t[i] === ch) { found = i; break; }
-    }
-    if (found === -1) return 0; // character not found — no match
-    // Bonus for consecutive characters
-    if (found === ti && qi > 0) consecutive++;
-    else consecutive = 0;
-    // Bonus for word boundary
-    const atWordStart = found === 0 || /[\s._\-([/]/.test(t[found - 1]);
-    score += 10 + consecutive * 15 + (atWordStart ? 20 : 0);
-    ti = found + 1;
+  const words = q.split(/\s+/).filter(Boolean);
+  let total = 0;
+  for (const w of words) {
+    const s = wordScore(t, w);
+    if (!s) return 0; // every word must match somewhere
+    total += s;
   }
-  // Penalty for long text (prefer shorter matches)
-  score -= Math.min(t.length * 0.3, 30);
-  return Math.max(0, Math.round(score));
+  return Math.round(total / Math.sqrt(words.length));
 }
 
-// Legacy exact/substring scoring for backward compatibility
-function scoreName(l, q, words) {
-  if (l === q) return 1000;
-  if (l.startsWith(q)) return 800;
-  const i = l.indexOf(q);
-  if (i > 0) return /[\s._\-(\[]/.test(l[i - 1]) ? 700 : 500;
-  if (words.length > 1 && words.every((w) => l.includes(w))) return 400;
-  return 0;
+// Bounded Levenshtein with early exit — null when the distance exceeds maxDist.
+function editDistance(a, b, maxDist) {
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > maxDist) return null;
+  let prev = new Array(lb + 1), cur = new Array(lb + 1);
+  for (let j = 0; j <= lb; j++) prev[j] = j;
+  for (let i = 1; i <= la; i++) {
+    cur[0] = i;
+    let rowMin = i;
+    const ca = a[i - 1];
+    for (let j = 1; j <= lb; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca === b[j - 1] ? 0 : 1));
+      if (cur[j] < rowMin) rowMin = cur[j];
+    }
+    if (rowMin > maxDist) return null; // this row can't recover — bail early
+    const tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[lb];
 }
 
-function fuzzy(l, q) {
-  let j = 0;
-  for (let i = 0; i < l.length && j < q.length; i++) if (l[i] === q[j]) j++;
-  return j === q.length;
+// Typo tolerance: "setings" → Settings. Single-word queries of length ≥ 4 only,
+// so multi-word searches never get fuzzy-mangled.
+function typoScore(l, q) {
+  if (q.length < 4 || l === q) return 0;
+  const maxDist = q.length <= 5 ? 1 : 2;
+  let best = 0;
+  for (const w of l.split(/[^a-z0-9]+/)) {
+    if (!w || Math.abs(w.length - q.length) > maxDist) continue;
+    const d = editDistance(q, w, maxDist);
+    if (d === null || d === 0) continue;
+    const s = d === 1 ? 150 + Math.min(w.length, q.length) * 2 : 60 + Math.min(w.length, q.length);
+    if (s > best) best = s;
+  }
+  return best;
 }
 
 function calc(raw) {
@@ -425,14 +463,17 @@ function search(raw) {
     else if (f.glob) s = f.glob.test(it.n) || (it.k === 3 && f.glob.test(it.n + '.exe')) ? 600 : 0;
     else if (!q) s = 500;
     else {
-      s = scoreName(it.l, q, words);
-      // Fuzzy matching fallback for apps and files
-      if (!s) {
-        const fz = fuzzyScore(it.l, q);
-        if (fz > 0) s = Math.min(fz, 550);
+      s = fuzzyScore(it.l, q);
+      // Compressed-name match ("my project" → myproject.txt) wins when it beats word scoring
+      if (cq.length >= 2) {
+        const cs = it.c === cq ? 900 : it.c.startsWith(cq) ? 750 : it.c.includes(cq) ? 450 : 0;
+        if (cs > s) s = cs;
       }
-      if (!s && cq.length >= 2) s = it.c === cq ? 900 : it.c.startsWith(cq) ? 750 : it.c.includes(cq) ? 450 : 0;
-      if (!s && it.k >= 2 && q.length >= 2 && fuzzy(it.l, q)) s = 200;
+      // Typo tolerance as a last resort for weak single-word matches ("setings")
+      if (words.length === 1 && q.length >= 4 && s < 120) {
+        const ts = typoScore(it.l, q);
+        if (ts > s) s = ts;
+      }
     }
     if (!s) continue;
     const base = (it.k === 1 ? s * 0.75 : s) + (it.k === 3 ? 300 : it.k === 2 ? 150 : 0) - it.l.length * 0.5;
@@ -704,23 +745,28 @@ function ensurePoller() {
     return;
   }
   if (poller) return;
-  poller = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(POLL_SCRIPT, 'utf16le').toString('base64')],
-    { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
-  poller.stdin.on('error', () => {});
-  let buf = '';
-  poller.stdout.on('data', (d) => {
-    buf += d;
-    let i;
-    while ((i = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      const pid = line.split('|')[1];
-      if (pid === undefined) continue;
-      if (!pollerOk) { pollerOk = true; applyVisibility(); broadcastState(); }
-      else if (Number(pid) !== process.pid) pinAll();
-    }
-  });
-  poller.on('exit', () => { poller = null; pollerOk = false; applyVisibility(); broadcastState(); });
+  // Resolve a working PowerShell first — on GFN images powershell.exe is spawn-blocked.
+  ensurePs().then((exe) => {
+    if (poller || prefs.widgetMode !== 'desktop') return; // mode may have changed while probing
+    const p = spawn(exe, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(POLL_SCRIPT, 'utf16le').toString('base64')],
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+    poller = p;
+    p.stdin.on('error', () => {});
+    let buf = '';
+    p.stdout.on('data', (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        const pid = line.split('|')[1];
+        if (pid === undefined) continue;
+        if (!pollerOk) { pollerOk = true; applyVisibility(); broadcastState(); }
+        else if (Number(pid) !== process.pid) pinAll();
+      }
+    });
+    p.on('exit', () => { if (poller === p) poller = null; pollerOk = false; applyVisibility(); broadcastState(); });
+  }).catch((e) => logError(e));
 }
 
 // ---------- clipboard history (memory only) ----------
@@ -765,13 +811,36 @@ const GFN_RIGS = [
 ];
 const GFN_LOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log');
 
-const runText = (cmd, args, timeout = 8000) => new Promise((resolve) => {
-  execFile(cmd, args, { windowsHide: true, timeout, encoding: 'utf8' }, (err, out) => resolve(err ? '' : String(out)));
-});
+// ---------- PowerShell resolution ----------
+// Some locked-down images (e.g. GeForce NOW via SalsaNOW) block spawning Windows
+// PowerShell 5.1 — powershell.exe dies with EPERM — while PowerShell 7 (pwsh) runs
+// fine. Probe the candidates once and remember the winner; helpers ask for
+// "powershell" and get whichever one actually works on this machine.
+let psExe = null;
+const PS_CANDIDATES = ['pwsh.exe', 'I:\\Apps\\SalsaNOW\\SilentApps\\Powershell\\pwsh.exe', 'powershell.exe'];
+function probePs(exe) {
+  return new Promise((resolve) => {
+    try { execFile(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { timeout: 8000 }, (err) => resolve(!err)); } catch { resolve(false); }
+  });
+}
+async function ensurePs() {
+  if (psExe) return psExe;
+  for (const c of PS_CANDIDATES) if (await probePs(c)) { psExe = c; break; }
+  psExe = psExe || 'powershell.exe'; // last resort — every caller already tolerates failures
+  return psExe;
+}
+
+// runText: pass "powershell" to get the machine's working PowerShell (pwsh preferred).
+const runText = async (cmd, args, timeout = 8000) => {
+  if (cmd === 'powershell') cmd = await ensurePs();
+  return new Promise((resolve) => {
+    execFile(cmd, args, { windowsHide: true, timeout, encoding: 'utf8' }, (err, out) => resolve(err ? '' : String(out)));
+  });
+};
 const lines = (s) => s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
 async function gpuNames() {
-  let names = lines(await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(Get-CimInstance Win32_VideoController).Name']));
+  let names = lines(await runText('powershell', ['-NoProfile', '-NonInteractive', '-Command', '(Get-CimInstance Win32_VideoController).Name']));
   if (!names.length) names = lines(await runText('wmic.exe', ['path', 'win32_VideoController', 'get', 'name'])).filter((n) => n.toLowerCase() !== 'name');
   const real = names.filter((n) => !VIRTUAL_GPU.test(n));
   if (real.length) return real;
@@ -982,7 +1051,7 @@ switch ('${action}') {
 let mediaCache = { t: 0, d: null };
 async function getMediaInfo() {
   if (Date.now() - mediaCache.t < 1500) return mediaCache.d;
-  const out = (await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', SMTC_GET], 5000)).trim();
+  const out = (await runText('powershell', ['-NoProfile', '-NonInteractive', '-Command', SMTC_GET], 5000)).trim();
   let d = null;
   if (out && out !== '{}') {
     try { d = JSON.parse(out); } catch { d = null; }
@@ -992,7 +1061,7 @@ async function getMediaInfo() {
 }
 async function mediaControl(action) {
   if (!['play', 'pause', 'toggle', 'next', 'prev'].includes(action)) return;
-  await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', SMTC_CTRL(action)], 5000);
+  await runText('powershell', ['-NoProfile', '-NonInteractive', '-Command', SMTC_CTRL(action)], 5000);
   mediaCache = { t: 0, d: null };
 }
 
@@ -1329,7 +1398,7 @@ ipcMain.handle('file-info', async (_e, p) => {
       target: null,
     };
     if (/\.lnk$/i.test(fp)) {
-      const out = await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      const out = await runText('powershell', ['-NoProfile', '-NonInteractive', '-Command',
         `(New-Object -ComObject WScript.Shell).CreateShortcut(${psq(fp)}).TargetPath`], 3000);
       info.target = lines(out)[0] || null;
     }
@@ -1341,9 +1410,9 @@ ipcMain.on('show-props', (_e, p) => {
   try {
     if (win && win.isVisible()) win.hide();
     const fp = String(p);
-    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    ensurePs().then((exe) => spawn(exe, ['-NoProfile', '-NonInteractive', '-Command',
       `$s=New-Object -ComObject Shell.Application;$f=$s.Namespace(${psq(path.dirname(fp))});$i=$f.ParseName(${psq(path.basename(fp))});if($i){$i.InvokeVerb('properties')}`],
-      { windowsHide: true, detached: true, stdio: 'ignore' }).unref();
+      { windowsHide: true, detached: true, stdio: 'ignore' }).unref()).catch((e) => logError(e));
   } catch (e) { logError(e); }
 });
 ipcMain.on('forget', (_e, p) => {
